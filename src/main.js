@@ -13,6 +13,8 @@ import { Player } from './render/player.js';
 import { Avatar } from './render/avatar.js';
 import { Minimap } from './render/minimap.js';
 import { compassFromYaw } from './lib/minimap.js';
+import { addPhotoPoints } from './render/photos.js';
+import { nearestIndex } from './lib/nearest.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay');
@@ -23,6 +25,11 @@ const hudCount = document.getElementById('hud-count');
 const compassEl = document.getElementById('compass');
 const minimapEl = document.getElementById('minimap');
 let minimap = null;
+let photoLayer = null;
+const photoEl = document.getElementById('photo');
+const photoImg = document.getElementById('photo-img');
+const photoCap = document.getElementById('photo-cap');
+const photoClose = document.getElementById('photo-close');
 
 // ---- Renderer ----
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -182,6 +189,20 @@ async function init() {
     console.warn('No tree data.', err);
   }
 
+  // Real street photos of the town (Panoramax). Markers plus a P-key viewer
+  // that shows the nearest actual photograph of where the player stands.
+  try {
+    const pres = await fetch(`${import.meta.env.BASE_URL}data/panoramax.json`);
+    if (pres.ok) {
+      const pd = await pres.json();
+      if (pd.photos && pd.photos.length) {
+        photoLayer = addPhotoPoints(scene, pd.photos, proj, groundAt);
+      }
+    }
+  } catch (err) {
+    console.warn('No street photos.', err);
+  }
+
   // Animated CC0 avatar for third person. Optional.
   avatar = new Avatar();
   try {
@@ -229,9 +250,48 @@ function onLock() {
   overlay.classList.add('hidden');
 }
 function onUnlock() {
+  if (photoOpen) return;
   overlay.classList.remove('hidden');
   startBtn.textContent = 'Resume';
 }
+
+// Real street-photo viewer. Shows the nearest actual Panoramax photograph of
+// where the player stands. Acts like a pause screen while open.
+let photoOpen = false;
+function openNearestPhoto() {
+  if (!photoLayer || !photoLayer.points.length || !player) return;
+  const pp = player.pos || camera.position;
+  const { index, distance } = nearestIndex(photoLayer.points, pp.x, pp.z);
+  if (index < 0) return;
+  const ph = photoLayer.points[index];
+  photoImg.src = ph.sd;
+  photoCap.innerHTML =
+    `Real photo of this spot · ${Math.round(distance)} m away · camera facing ${ph.az}° · ${ph.at}<br>` +
+    `© ${ph.by}, <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a>, licensed CC BY-SA 4.0`;
+  photoEl.classList.remove('hidden');
+  photoOpen = true;
+  if (document.exitPointerLock) document.exitPointerLock();
+}
+function closePhoto() {
+  if (!photoOpen) return;
+  photoEl.classList.add('hidden');
+  photoOpen = false;
+  overlay.classList.remove('hidden');
+  startBtn.textContent = 'Resume';
+}
+photoClose.addEventListener('click', closePhoto);
+photoEl.addEventListener('click', (e) => {
+  if (e.target === photoEl) closePhoto();
+});
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyP') {
+    e.preventDefault();
+    if (photoOpen) closePhoto();
+    else openNearestPhoto();
+  } else if (e.code === 'Escape' && photoOpen) {
+    closePhoto();
+  }
+});
 
 // ---- HUD ----
 let frame = 0;
@@ -250,6 +310,10 @@ function updateHud() {
     minimap.draw(pp.x, pp.z, player.yaw);
     const c = compassFromYaw(player.yaw);
     compassEl.textContent = `${c.cardinal} · ${c.deg.toFixed(0)}°`;
+    if (photoLayer && photoLayer.points.length) {
+      const n = nearestIndex(photoLayer.points, pp.x, pp.z);
+      hudPos.textContent += ` · real photo ${Math.round(n.distance)} m (P)`;
+    }
   }
 }
 

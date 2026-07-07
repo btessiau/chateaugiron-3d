@@ -82,6 +82,60 @@
         font-variant-numeric: tabular-nums;
       }
 
+      #photo {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(4, 7, 12, 0.82);
+        transition: opacity 0.2s ease;
+      }
+      #photo.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #photo-inner {
+        position: relative;
+        max-width: 88vw;
+        max-height: 86vh;
+      }
+      #photo-img {
+        display: block;
+        max-width: 88vw;
+        max-height: 86vh;
+        border-radius: 10px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65);
+        background: #11161f;
+        min-width: 320px;
+        min-height: 200px;
+      }
+      #photo-cap {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #b9cbe6;
+        text-align: center;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+      }
+      #photo-cap a {
+        color: #8fb2df;
+      }
+      #photo-close {
+        position: absolute;
+        top: -14px;
+        right: -14px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        font-size: 15px;
+        color: #06111f;
+        background: linear-gradient(180deg, #9ecbff, #5b9bff);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+      }
+
       #overlay {
         position: fixed;
         inset: 0;
@@ -177,11 +231,22 @@
       <div id="hud-count"></div>
     </div>
 
-    <div class="credit">Data © OpenStreetMap contributors (ODbL)</div>
+    <div class="credit">
+      Map data © OpenStreetMap contributors (ODbL) · Photos © Panoramax (CC BY-SA 4.0) · Aerial ©
+      IGN
+    </div>
 
     <div id="minimap-wrap">
       <canvas id="minimap" width="180" height="180"></canvas>
       <div id="compass">N · 0°</div>
+    </div>
+
+    <div id="photo" class="hidden">
+      <div id="photo-inner">
+        <img id="photo-img" alt="Real street photo of Châteaugiron" />
+        <div id="photo-cap"></div>
+        <button id="photo-close" title="Close (P or Esc)">✕</button>
+      </div>
     </div>
 
     <div id="overlay">
@@ -196,6 +261,7 @@
           <span class="key">Shift — run</span>
           <span class="key">Space — jump</span>
           <span class="key">V — 1st / 3rd person</span>
+          <span class="key">P — real photo here</span>
           <span class="key">Esc — release</span>
         </div>
         <button class="start" id="start" disabled>Loading town…</button>
