@@ -17,10 +17,10 @@ export class Player {
     this.jumpSpeed = 6.0;
     this.gravity = 18.0;
 
-    this.mode = 'third'; // 'first' | 'third'
+    this.mode = 'first'; // 'first' | 'third'
     this.dist = 6.5; // third-person camera distance
     this.yaw = 0;
-    this.pitch = -0.15;
+    this.pitch = -0.06;
 
     this.pos = new THREE.Vector3();
     this.vy = 0;
