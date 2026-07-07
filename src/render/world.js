@@ -243,6 +243,83 @@ function buildChurchInto(o) {
   spireGeos.push(sp);
 }
 
+// A cylindrical stone turret with a conical slate roof (a "poivriere"),
+// characteristic of French chateaux. Adds meshes straight into the group.
+function addTurret(group, x, z, gy, radius, height, coneH, stoneMat, slateMat) {
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius * 1.05, height, 14),
+    stoneMat,
+  );
+  shaft.position.set(x, gy + height / 2, z);
+  shaft.castShadow = true;
+  shaft.receiveShadow = true;
+  group.add(shaft);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(radius * 1.25, coneH, 14), slateMat);
+  cone.position.set(x, gy + height + coneH / 2, z);
+  cone.castShadow = true;
+  group.add(cone);
+}
+
+// The Chateau de Chateaugiron: its signature is a tall round crenellated keep
+// (the "grosse tour"). Placed at the real keep location, with two pepperpot
+// turrets on the logis. Authored geometry, verified by screenshot.
+function buildChateau(group, groundY, colliders) {
+  const stone = new THREE.MeshStandardMaterial({ color: 0x8f887b, roughness: 0.9, metalness: 0.0 });
+  const darkStone = new THREE.MeshStandardMaterial({
+    color: 0x7d766a,
+    roughness: 0.92,
+    metalness: 0.0,
+  });
+  const slate = new THREE.MeshStandardMaterial({
+    color: 0x2f3743,
+    roughness: 0.6,
+    metalness: 0.12,
+  });
+
+  // Round keep (donjon).
+  const kx = -77;
+  const kz = -27;
+  const gy = groundY(kx, kz);
+  const shaftH = 27;
+  const rTop = 6.2;
+  const rBot = 6.9;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, shaftH, 18), stone);
+  shaft.position.set(kx, gy + shaftH / 2, kz);
+  shaft.castShadow = true;
+  shaft.receiveShadow = true;
+  group.add(shaft);
+
+  // Corbel band (machicolation) just under the parapet.
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(rTop + 0.6, rTop, 1.6, 18), darkStone);
+  band.position.set(kx, gy + shaftH + 0.8, kz);
+  band.castShadow = true;
+  group.add(band);
+
+  // Crenellated parapet: alternating merlons around the rim.
+  const merlonCount = 12;
+  for (let i = 0; i < merlonCount; i++) {
+    const a = (i / merlonCount) * Math.PI * 2;
+    const mx = kx + Math.cos(a) * (rTop + 0.1);
+    const mz = kz + Math.sin(a) * (rTop + 0.1);
+    const merlon = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.3), stone);
+    merlon.position.set(mx, gy + shaftH + 1.7 + 1.1, mz);
+    merlon.rotation.y = -a;
+    merlon.castShadow = true;
+    group.add(merlon);
+  }
+  colliders.push({ minX: kx - rBot, maxX: kx + rBot, minZ: kz - rBot, maxZ: kz + rBot });
+
+  // Two pepperpot turrets flanking the logis.
+  for (const [tx, tz] of [
+    [-101, -14],
+    [-79, 6],
+  ]) {
+    const tgy = groundY(tx, tz);
+    addTurret(group, tx, tz, tgy, 3.1, 15, 8, darkStone, slate);
+    colliders.push({ minX: tx - 3.4, maxX: tx + 3.4, minZ: tz - 3.4, maxZ: tz + 3.4 });
+  }
+}
+
 // Build one InstancedMesh for a list of tree placements ({ x, z, s }).
 function instanceTrees(placements, groundY) {
   if (!placements.length) return null;
@@ -538,6 +615,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   scene.add(group);
 
   buildTrees(group, woods, groundY);
+  buildChateau(group, groundY, colliders);
 
   return {
     bounds,
