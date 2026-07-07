@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { resolveClip } from '../lib/clip.js';
+import { skinToneFor } from '../lib/skin.js';
 
 const CLIP_ALIASES = {
   Idle: ['Idle'],
@@ -31,6 +32,11 @@ export class Avatar {
       if (o.isMesh) {
         o.castShadow = true;
         o.receiveShadow = true;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) {
+          const tone = m && m.color ? skinToneFor(m.name) : null;
+          if (tone) m.color.setRGB(tone.r, tone.g, tone.b);
+        }
       }
     });
 
