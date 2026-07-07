@@ -174,7 +174,11 @@ export class Player {
       const ty = this.pos.y + 1.5;
       const tz = this.pos.z;
       const off = orbitOffset(this.yaw, this.pitch, this.dist);
-      this.camera.position.set(tx + off.x, ty + off.y, tz + off.z);
+      const cx = tx + off.x;
+      const cz = tz + off.z;
+      const minY = this._groundAt(cx, cz) + 0.6;
+      const cy = Math.max(ty + off.y, minY);
+      this.camera.position.set(cx, cy, cz);
       this.camera.lookAt(tx, ty, tz);
     }
   }
