@@ -26,6 +26,8 @@ export class Player {
     this.vy = 0;
     this.onGround = true;
     this.ground = null;
+    this.collider = null;
+    this.radius = 0.45;
 
     this.keys = { forward: false, back: false, left: false, right: false, run: false };
     this._locked = false;
@@ -62,6 +64,9 @@ export class Player {
 
   setGround(fn) {
     this.ground = fn;
+  }
+  setCollider(fn) {
+    this.collider = fn;
   }
   setPosition(x, y, z) {
     this.pos.set(x, y, z);
@@ -127,6 +132,11 @@ export class Player {
         this.pos.x += mv.dx;
         this.pos.z += mv.dz;
         this._heading = mv.heading;
+      }
+      if (this.collider) {
+        const [nx, nz] = this.collider(this.pos.x, this.pos.z, this.radius);
+        this.pos.x = nx;
+        this.pos.z = nz;
       }
       this._moving = mv.moving;
       this._running = this.keys.run && mv.moving;

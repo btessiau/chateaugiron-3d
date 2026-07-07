@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { makeProjector, metresToLatLon } from './lib/geo.js';
 import { makeHeightField } from './lib/terrain.js';
+import { buildGrid, collide } from './lib/collision.js';
 import { buildWorld, buildTerrain, buildGround } from './render/world.js';
 import { Player } from './render/player.js';
 import { Avatar } from './render/avatar.js';
@@ -121,6 +122,10 @@ async function init() {
   player = new Player(camera, renderer.domElement, avatar);
   player.onLock(onLock);
   player.onUnlock(onUnlock);
+
+  // Building collision from footprint boxes in a spatial grid.
+  const grid = buildGrid(world.colliders, 24);
+  player.setCollider((x, z, r) => collide(grid, world.colliders, x, z, r));
 
   // Spawn in an open spot near the château, looking toward it.
   const sp = world.spawn || { x: 18, z: 62 };

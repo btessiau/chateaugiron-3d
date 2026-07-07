@@ -88,6 +88,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const roadPos = [];
   const roadCol = [];
   const bCentroids = [];
+  const colliders = [];
 
   let bi = 0;
   for (const f of data.features) {
@@ -105,6 +106,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
         z: cz,
         r: 0.5 * Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ),
       });
+      colliders.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
 
       const shape = ringToShape(pts);
       if (!shape) continue;
@@ -244,6 +246,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     bounds,
     counts: data.meta?.counts || {},
     spawn: pickSpawn(bCentroids),
+    colliders,
     disposed: () => {},
   };
 }
