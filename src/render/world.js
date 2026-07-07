@@ -410,18 +410,9 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     group.add(mesh);
   }
 
+  let waterGeo = null;
   if (waterGeos.length) {
-    const merged = mergeGeometries(waterGeos, false);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x2f6d86,
-      roughness: 0.18,
-      metalness: 0.15,
-      transparent: true,
-      opacity: 0.92,
-    });
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.receiveShadow = true;
-    group.add(mesh);
+    waterGeo = mergeGeometries(waterGeos, false);
   }
 
   scene.add(group);
@@ -433,6 +424,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     counts: data.meta?.counts || {},
     spawn: pickSpawn(bCentroids),
     colliders,
+    waterGeo,
     disposed: () => {},
   };
 }

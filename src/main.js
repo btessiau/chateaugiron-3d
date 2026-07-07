@@ -49,6 +49,13 @@ sky.material.uniforms.mieDirectionalG.value = 0.8;
 sky.material.uniforms.sunPosition.value.set(sunDir.x, sunDir.y, sunDir.z);
 scene.add(sky);
 
+// Bake the sky into an environment map, used only as a reflection for the
+// water below (not for scene lighting, which would blow out the buildings).
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+const skyEnv = pmrem.fromScene(sky, 0, 0.1, 100000).texture;
+pmrem.dispose();
+
 // ---- Lights ----
 const hemi = new THREE.HemisphereLight(0xbcd3ff, 0x55503f, 0.7);
 scene.add(hemi);
@@ -68,6 +75,8 @@ scene.add(sun.target);
 // ---- Walker ----
 let player = null;
 let avatar = null;
+let water = null;
+let waterNormals = null;
 
 let data = null;
 let ready = false;
@@ -122,6 +131,31 @@ async function init() {
   if (hf) buildTerrain(scene, hf, ortho);
   else buildGround(scene, world.bounds);
 
+  // Animated water for the etang and streams: a low-roughness surface that
+  // reflects the baked sky environment and catches a sun glint.
+  if (world.waterGeo) {
+    const normals = new THREE.TextureLoader().load(
+      `${import.meta.env.BASE_URL}textures/waternormals.jpg`,
+    );
+    normals.wrapS = normals.wrapT = THREE.RepeatWrapping;
+    normals.repeat.set(0.12, 0.12);
+    waterNormals = normals;
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x183d52,
+      roughness: 0.06,
+      metalness: 0.0,
+      normalMap: normals,
+      normalScale: new THREE.Vector2(0.45, 0.45),
+      envMap: skyEnv,
+      envMapIntensity: 0.8,
+      transparent: true,
+      opacity: 0.94,
+    });
+    water = new THREE.Mesh(world.waterGeo, mat);
+    water.receiveShadow = true;
+    scene.add(water);
+  }
+
   const groundAt = (x, z) => (hf ? hf.sample(x, z) : 0);
 
   // Individual mapped trees (OSM natural=tree), instanced. Optional.
@@ -171,7 +205,7 @@ async function init() {
 
   // Store projector + game internals for the HUD and for headless captures.
   window.__proj = proj;
-  window.__game = { scene, camera, renderer, player, avatar, getHeight: groundAt, hf };
+  window.__game = { scene, camera, renderer, player, avatar, getHeight: groundAt, hf, water };
 }
 
 startBtn.addEventListener('click', () => {
@@ -205,6 +239,10 @@ const clock = new THREE.Clock();
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (player) player.update(dt);
+  if (waterNormals) {
+    waterNormals.offset.x += dt * 0.012;
+    waterNormals.offset.y += dt * 0.009;
+  }
   updateHud();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
