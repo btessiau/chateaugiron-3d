@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { makeProjector, metresToLatLon } from './lib/geo.js';
 import { makeHeightField } from './lib/terrain.js';
 import { buildWorld, buildTerrain, buildGround } from './render/world.js';
-import { Walker } from './render/controls.js';
+import { Player } from './render/player.js';
+import { Avatar } from './render/avatar.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay');
@@ -49,7 +50,8 @@ scene.add(sun);
 scene.add(sun.target);
 
 // ---- Walker ----
-const walker = new Walker(camera, renderer.domElement);
+let player = null;
+let avatar = null;
 
 let data = null;
 let ready = false;
@@ -106,11 +108,27 @@ async function init() {
 
   const groundAt = (x, z) => (hf ? hf.sample(x, z) : 0);
 
+  // Animated CC0 avatar for third person. Optional.
+  avatar = new Avatar();
+  try {
+    await avatar.load(`${import.meta.env.BASE_URL}models/gltf/RobotExpressive/RobotExpressive.glb`);
+    scene.add(avatar.root);
+  } catch (err) {
+    console.warn('No avatar model, third person disabled.', err);
+    avatar = null;
+  }
+
+  player = new Player(camera, renderer.domElement, avatar);
+  player.onLock(onLock);
+  player.onUnlock(onUnlock);
+
   // Spawn in an open spot near the château, looking toward it.
   const sp = world.spawn || { x: 18, z: 62 };
-  walker.setGround(groundAt);
-  walker.setPosition(sp.x, groundAt(sp.x, sp.z) + walker.eyeHeight, sp.z);
-  camera.lookAt(0, groundAt(0, 0) + 6, 0);
+  player.setGround(groundAt);
+  player.setPosition(sp.x, groundAt(sp.x, sp.z), sp.z);
+  // Frame the avatar from behind, looking toward the château.
+  player.yaw = Math.atan2(sp.x, sp.z);
+  player._placeCamera();
 
   const c = data.meta.counts || {};
   hudCount.textContent = `${c.building || 0} buildings · ${c.road || 0} roads · ${c.water || 0} water · ${c.green || 0} green`;
@@ -122,18 +140,20 @@ async function init() {
 
   // Store projector + game internals for the HUD and for headless captures.
   window.__proj = proj;
-  window.__game = { scene, camera, renderer, walker, getHeight: groundAt, hf };
+  window.__game = { scene, camera, renderer, player, avatar, getHeight: groundAt, hf };
 }
 
 startBtn.addEventListener('click', () => {
-  if (ready) walker.lock();
+  if (ready) player.lock();
 });
 
-walker.onLock(() => overlay.classList.add('hidden'));
-walker.onUnlock(() => {
+function onLock() {
+  overlay.classList.add('hidden');
+}
+function onUnlock() {
   overlay.classList.remove('hidden');
-  startBtn.textContent = 'Resume walking';
-});
+  startBtn.textContent = 'Resume';
+}
 
 // ---- HUD ----
 let frame = 0;
@@ -153,7 +173,7 @@ function updateHud() {
 const clock = new THREE.Clock();
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.1);
-  walker.update(dt);
+  if (player) player.update(dt);
   updateHud();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
