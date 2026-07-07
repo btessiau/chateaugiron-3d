@@ -69,14 +69,31 @@ function setColorAttr(geo, color) {
   geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
 }
 
+// A curated palette of real French/Breton town facade tones: lime-render
+// creams and whites, warm beiges, pale stone and greige, with the odd pale
+// ochre or grey-blue. Commons colours are listed more than once so they turn
+// up more often than the rare accents.
+const FACADE_PALETTE = [
+  0xefe9dc, 0xefe9dc, 0xe9dfc9, 0xe9dfc9, 0xe3d7bd, 0xe3d7bd, 0xdccfb2, 0xdccfb2, 0xd6c8a6,
+  0xcfc3aa, 0xe6ddcb, 0xe6ddcb, 0xd2c4a2, 0xcbb896, 0xd8cbb8, 0xc7b79a, 0xd0bfa0, 0xc3b5a4,
+  0xcabfae, 0xb9a98f,
+].map((hex) => new THREE.Color(hex));
+
+function fract01(x) {
+  return x - Math.floor(x);
+}
+
 function hashHue(i) {
-  // Deterministic warm stone palette for facade variety.
-  const r = (Math.sin(i * 12.9898) * 43758.5453) % 1;
-  const t = r - Math.floor(r);
-  const hue = 0.09 + t * 0.05;
-  const sat = 0.12 + ((i * 7) % 5) * 0.03;
-  const lig = 0.58 + ((i * 13) % 7) * 0.02;
-  return new THREE.Color().setHSL(hue, sat, lig);
+  // Pick a facade tone deterministically, then jitter its lightness a little so
+  // neighbours sharing a tone are not pixel-identical.
+  const r = fract01(Math.sin(i * 12.9898) * 43758.5453);
+  const base = FACADE_PALETTE[Math.floor(r * FACADE_PALETTE.length)];
+  const c = base.clone();
+  const hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl);
+  const jl = (fract01(Math.sin(i * 45.164) * 21421.1) - 0.5) * 0.08;
+  c.setHSL(hsl.h, hsl.s, Math.min(1, Math.max(0, hsl.l + jl)));
+  return c;
 }
 
 function slateColor(i) {
@@ -589,6 +606,7 @@ function instanceTrees(placements, groundY) {
   const up = new THREE.Vector3(0, 1, 0);
   const scl = new THREE.Vector3();
   const pos = new THREE.Vector3();
+  const col = new THREE.Color();
   for (let i = 0; i < placements.length; i++) {
     const p = placements[i];
     q.setFromAxisAngle(up, (i * 2.399963) % (Math.PI * 2));
@@ -596,8 +614,15 @@ function instanceTrees(placements, groundY) {
     pos.set(p.x, groundY(p.x, p.z) - 0.2, p.z);
     m.compose(pos, q, scl);
     mesh.setMatrixAt(i, m);
+    // Per-tree tint so the woodland is not one flat green: vary brightness and
+    // nudge warm/cool. instanceColor multiplies the canopy and trunk colours.
+    const b = 0.72 + fract01(Math.sin(i * 3.71) * 9137.13) * 0.3;
+    const w = (fract01(Math.sin(i * 1.73) * 3571.31) - 0.5) * 0.14;
+    col.setRGB(Math.min(1, b * (1 + w)), Math.min(1, b * 1.04), Math.min(1, b * (1 - w * 0.6)));
+    mesh.setColorAt(i, col);
   }
   mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   return mesh;
 }
 
