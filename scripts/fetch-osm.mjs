@@ -9,6 +9,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { classify, trimTags } from '../src/lib/osm.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -51,41 +52,13 @@ const ENDPOINTS = [
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
-// Keep only the tags we actually use downstream, to keep the file small.
-const TAG_KEYS = [
-  'building', 'building:levels', 'building:part', 'height', 'min_height',
-  'roof:shape', 'roof:height', 'highway', 'natural', 'water', 'waterway',
-  'landuse', 'leisure', 'name', 'layer', 'bridge', 'tunnel', 'amenity', 'historic',
-];
-
-function classify(tags) {
-  if (tags.building && tags.building !== 'no') return 'building';
-  if (tags['building:part'] && tags['building:part'] !== 'no') return 'building';
-  if (tags.highway) return 'road';
-  if (
-    tags.natural === 'water' ||
-    tags.water ||
-    tags.waterway === 'riverbank'
-  ) return 'water';
-  const greenLanduse = ['grass', 'forest', 'meadow', 'recreation_ground', 'village_green', 'cemetery', 'orchard', 'farmland', 'farmyard'];
-  const greenLeisure = ['park', 'garden', 'pitch', 'playground', 'golf_course', 'common', 'nature_reserve'];
-  if (
-    ['wood', 'scrub', 'grassland'].includes(tags.natural) ||
-    greenLanduse.includes(tags.landuse) ||
-    greenLeisure.includes(tags.leisure)
-  ) return 'green';
-  return null; // ignore other landuse (residential zones etc.) for V0
-}
-
-function trimTags(tags = {}) {
-  const out = {};
-  for (const k of TAG_KEYS) if (tags[k] != null) out[k] = tags[k];
-  return out;
-}
-
 async function run() {
-  console.log(`Fetching Châteaugiron OSM data — radius ${RADIUS} m around ${CENTER.lat},${CENTER.lon}`);
-  console.log(`bbox: ${bbox.minlat.toFixed(5)},${bbox.minlon.toFixed(5)},${bbox.maxlat.toFixed(5)},${bbox.maxlon.toFixed(5)}`);
+  console.log(
+    `Fetching Châteaugiron OSM data — radius ${RADIUS} m around ${CENTER.lat},${CENTER.lon}`,
+  );
+  console.log(
+    `bbox: ${bbox.minlat.toFixed(5)},${bbox.minlon.toFixed(5)},${bbox.maxlat.toFixed(5)},${bbox.maxlon.toFixed(5)}`,
+  );
 
   let json = null;
   let lastErr = null;
@@ -139,7 +112,9 @@ async function run() {
   writeFileSync(outPath, JSON.stringify(payload));
   const kb = (JSON.stringify(payload).length / 1024).toFixed(0);
   console.log(`\nWrote ${outPath} (${kb} KB)`);
-  console.log(`Features: ${features.length}  |  buildings ${counts.building}, roads ${counts.road}, water ${counts.water}, green ${counts.green}`);
+  console.log(
+    `Features: ${features.length}  |  buildings ${counts.building}, roads ${counts.road}, water ${counts.water}, green ${counts.green}`,
+  );
 }
 
 run().catch((err) => {

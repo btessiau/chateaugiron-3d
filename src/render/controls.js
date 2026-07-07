@@ -1,5 +1,5 @@
 // First-person walking controller built on three.js PointerLockControls.
-// Human eye height, walk and run speeds, WASD + mouse look. Flat ground for V0.
+// Human eye height, walk and run speeds, WASD + mouse look.
 
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
@@ -8,7 +8,7 @@ export class Walker {
   constructor(camera, domElement) {
     this.eyeHeight = 1.7;
     this.walkSpeed = 3.4; // m/s
-    this.runSpeed = 8.5;  // m/s
+    this.runSpeed = 8.5; // m/s
     this.controls = new PointerLockControls(camera, domElement);
     this.camera = camera;
 
@@ -21,25 +21,55 @@ export class Walker {
     document.addEventListener('keyup', (e) => this._onKey(e, false));
   }
 
-  get object() { return this.controls.object; }
+  get object() {
+    return this.controls.object;
+  }
 
-  lock() { this.controls.lock(); }
-  unlock() { this.controls.unlock(); }
-  get isLocked() { return this.controls.isLocked; }
+  lock() {
+    this.controls.lock();
+  }
+  unlock() {
+    this.controls.unlock();
+  }
+  get isLocked() {
+    return this.controls.isLocked;
+  }
 
-  onLock(fn) { this.controls.addEventListener('lock', fn); }
-  onUnlock(fn) { this.controls.addEventListener('unlock', fn); }
+  onLock(fn) {
+    this.controls.addEventListener('lock', fn);
+  }
+  onUnlock(fn) {
+    this.controls.addEventListener('unlock', fn);
+  }
 
-  setPosition(x, y, z) { this.controls.object.position.set(x, y, z); }
+  setPosition(x, y, z) {
+    this.controls.object.position.set(x, y, z);
+  }
 
   _onKey(e, down) {
     switch (e.code) {
-      case 'KeyW': case 'ArrowUp': this.keys.forward = down; break;
-      case 'KeyS': case 'ArrowDown': this.keys.back = down; break;
-      case 'KeyA': case 'ArrowLeft': this.keys.left = down; break;
-      case 'KeyD': case 'ArrowRight': this.keys.right = down; break;
-      case 'ShiftLeft': case 'ShiftRight': this.keys.run = down; break;
-      default: return;
+      case 'KeyW':
+      case 'ArrowUp':
+        this.keys.forward = down;
+        break;
+      case 'KeyS':
+      case 'ArrowDown':
+        this.keys.back = down;
+        break;
+      case 'KeyA':
+      case 'ArrowLeft':
+        this.keys.left = down;
+        break;
+      case 'KeyD':
+      case 'ArrowRight':
+        this.keys.right = down;
+        break;
+      case 'ShiftLeft':
+      case 'ShiftRight':
+        this.keys.run = down;
+        break;
+      default:
+        return;
     }
   }
 
@@ -47,7 +77,6 @@ export class Walker {
     if (!this.controls.isLocked) return;
     const speed = this.keys.run ? this.runSpeed : this.walkSpeed;
 
-    // Desired direction in local space (z forward, x right).
     this._dir.set(0, 0, 0);
     if (this.keys.forward) this._dir.z += 1;
     if (this.keys.back) this._dir.z -= 1;
@@ -58,7 +87,6 @@ export class Walker {
     this.controls.moveForward(this._dir.z * speed * dt);
     this.controls.moveRight(this._dir.x * speed * dt);
 
-    // Keep the walker glued to the ground (flat terrain for V0).
     this.controls.object.position.y = this.eyeHeight;
   }
 }

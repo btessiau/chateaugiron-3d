@@ -3,9 +3,9 @@
 // walk it in first person.
 
 import * as THREE from 'three';
-import { makeProjector, metresToLatLon } from './geo.js';
-import { buildWorld, buildGround } from './world.js';
-import { Walker } from './controls.js';
+import { makeProjector, metresToLatLon } from './lib/geo.js';
+import { buildWorld, buildGround } from './render/world.js';
+import { Walker } from './render/controls.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay');
@@ -92,7 +92,9 @@ async function init() {
   window.__proj = proj;
 }
 
-startBtn.addEventListener('click', () => { if (ready) walker.lock(); });
+startBtn.addEventListener('click', () => {
+  if (ready) walker.lock();
+});
 
 walker.onLock(() => overlay.classList.add('hidden'));
 walker.onUnlock(() => {
@@ -103,7 +105,7 @@ walker.onUnlock(() => {
 // ---- HUD ----
 let frame = 0;
 function updateHud() {
-  if (!ready || (frame++ % 6 !== 0)) return;
+  if (!ready || frame++ % 6 !== 0) return;
   const p = camera.position;
   const dist = Math.hypot(p.x, p.z).toFixed(0);
   let ll = '';
