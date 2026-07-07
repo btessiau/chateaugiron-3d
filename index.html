@@ -54,6 +54,34 @@
         color: #7fb0ff;
       }
 
+      #minimap-wrap {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        z-index: 5;
+        width: 180px;
+        text-align: center;
+        pointer-events: none;
+      }
+      #minimap {
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: rgba(10, 16, 26, 0.55);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+      }
+      #compass {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #cfe3ff;
+        background: rgba(10, 16, 26, 0.55);
+        border: 1px solid rgba(120, 160, 220, 0.25);
+        border-radius: 6px;
+        padding: 2px 8px;
+        display: inline-block;
+        font-variant-numeric: tabular-nums;
+      }
+
       #overlay {
         position: fixed;
         inset: 0;
@@ -150,6 +178,11 @@
     </div>
 
     <div class="credit">Data © OpenStreetMap contributors (ODbL)</div>
+
+    <div id="minimap-wrap">
+      <canvas id="minimap" width="180" height="180"></canvas>
+      <div id="compass">N · 0°</div>
+    </div>
 
     <div id="overlay">
       <div class="card">

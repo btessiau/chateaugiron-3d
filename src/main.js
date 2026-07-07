@@ -11,6 +11,8 @@ import { sunPosition } from './lib/sun.js';
 import { buildWorld, buildTerrain, buildGround, addTreePoints } from './render/world.js';
 import { Player } from './render/player.js';
 import { Avatar } from './render/avatar.js';
+import { Minimap } from './render/minimap.js';
+import { compassFromYaw } from './lib/minimap.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay');
@@ -18,6 +20,9 @@ const startBtn = document.getElementById('start');
 const loadingEl = document.getElementById('loading');
 const hudPos = document.getElementById('hud-pos');
 const hudCount = document.getElementById('hud-count');
+const compassEl = document.getElementById('compass');
+const minimapEl = document.getElementById('minimap');
+let minimap = null;
 
 // ---- Renderer ----
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -131,6 +136,14 @@ async function init() {
   if (hf) buildTerrain(scene, hf, ortho);
   else buildGround(scene, world.bounds);
 
+  // North-up minimap built once from the projected town features.
+  try {
+    minimap = new Minimap(minimapEl).build(data.features, proj);
+  } catch (err) {
+    console.warn('Minimap unavailable.', err);
+    minimap = null;
+  }
+
   // Animated water for the etang and streams: a low-roughness surface that
   // reflects the baked sky environment and catches a sun glint.
   if (world.waterGeo) {
@@ -232,6 +245,12 @@ function updateHud() {
     ll = ` · ${g.lat.toFixed(5)}, ${g.lon.toFixed(5)}`;
   }
   hudPos.textContent = `${dist} m from château${ll}`;
+  if (player && minimap) {
+    const pp = player.pos || p;
+    minimap.draw(pp.x, pp.z, player.yaw);
+    const c = compassFromYaw(player.yaw);
+    compassEl.textContent = `${c.cardinal} · ${c.deg.toFixed(0)}°`;
+  }
 }
 
 // ---- Loop ----
