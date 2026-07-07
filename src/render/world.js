@@ -17,7 +17,34 @@ import {
   isOversized,
   normalizeRing,
   polygonArea,
+  doorwayGap,
 } from '../lib/geometry.js';
+
+// Build one thin oriented wall box between two ground points [x, z].
+function wallBoxGeo(p0, p1, wallH, gy, th) {
+  const dx = p1[0] - p0[0];
+  const dz = p1[1] - p0[1];
+  const len = Math.hypot(dx, dz);
+  const g = new THREE.BoxGeometry(len + th, wallH, th);
+  g.rotateY(Math.atan2(-dz, dx));
+  g.translate((p0[0] + p1[0]) / 2, gy + wallH / 2, (p0[1] + p1[1]) / 2);
+  return g;
+}
+
+// Approximate a wall with a run of small square colliders so the doorway gap
+// stays open whatever angle the wall sits at.
+function pushWallColliders(p0, p1, colliders, half = 0.6) {
+  const dx = p1[0] - p0[0];
+  const dz = p1[1] - p0[1];
+  const len = Math.hypot(dx, dz);
+  const n = Math.max(1, Math.ceil(len / 1.2));
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    const x = p0[0] + dx * t;
+    const z = p0[1] + dz * t;
+    colliders.push({ minX: x - half, maxX: x + half, minZ: z - half, maxZ: z + half });
+  }
+}
 
 function ringToShape(pts) {
   // pts: array of [x, z]. Shape uses (x, -z) so that after rotateX(-90 deg)
@@ -182,30 +209,53 @@ function treeSpacing(tags) {
   return 8;
 }
 
-// Turn a church or chapel footprint into a landmark: a tall stone nave, a steep
-// slate roof, and a square bell tower topped by a pyramidal spire. Pushes into
-// the shared geometry buckets so everything merges into a few meshes.
+// Turn a church or chapel footprint into an enterable landmark: a hollow stone
+// nave with a doorway, furniture and glowing glass, a steep slate roof, and a
+// bell tower topped by a pyramidal spire that rises above the roof line.
 function buildChurchInto(o) {
-  const { pts, tags, cx, cz, groundY, buildingGeos, roofGeos, towerGeos, spireGeos, colliders } = o;
+  const {
+    pts,
+    tags,
+    cx,
+    cz,
+    groundY,
+    buildingGeos,
+    roofGeos,
+    towerGeos,
+    spireGeos,
+    interiorGeos,
+    decorMeshes,
+    colliders,
+  } = o;
   const chapel = isChapel(tags) && !isChurch(tags);
   const embed = 1.5;
   const wallH = chapel ? 6.5 : 11;
-  const shape = ringToShape(pts);
-  if (!shape) return;
+  const box = orientedBox(pts);
   const gy = groundY(cx, cz);
 
-  let geo;
-  try {
-    geo = new THREE.ExtrudeGeometry(shape, { depth: wallH + embed, bevelEnabled: false, steps: 1 });
-  } catch {
-    return;
+  if (box.L >= 4 && box.W >= 3) {
+    buildChurchInterior({ box, gy, wallH, chapel, interiorGeos, decorMeshes, colliders });
+  } else {
+    // Too small to hollow out cleanly: keep a solid stone block.
+    const shape = ringToShape(pts);
+    if (shape) {
+      try {
+        const geo = new THREE.ExtrudeGeometry(shape, {
+          depth: wallH + embed,
+          bevelEnabled: false,
+          steps: 1,
+        });
+        geo.rotateX(-Math.PI / 2);
+        geo.translate(0, gy - embed, 0);
+        setColorAttr(geo, new THREE.Color(0x9c9484));
+        buildingGeos.push(geo);
+      } catch {
+        /* skip degenerate footprint */
+      }
+    }
+    colliders.push({ minX: cx - box.L, maxX: cx + box.L, minZ: cz - box.W, maxZ: cz + box.W });
   }
-  geo.rotateX(-Math.PI / 2);
-  geo.translate(0, gy - embed, 0);
-  setColorAttr(geo, new THREE.Color(0x9c9484));
-  buildingGeos.push(geo);
 
-  const box = orientedBox(pts);
   if (box.L >= 1.5 && box.W >= 1.0) {
     const roofH = Math.min(Math.max(box.W * 1.05, 2.0), 7.5);
     const rp = gableRoofPositions(box, gy + wallH, roofH);
@@ -216,24 +266,19 @@ function buildChurchInto(o) {
     roofGeos.push(rgeo);
   }
 
+  // Bell tower + spire, rising from the roof line so the nave stays clear.
   const t = towerPlacement(box);
-  const tgy = groundY(t.x, t.z);
-  const towerH = chapel ? 10 : 21;
-  const tgeo = new THREE.BoxGeometry(t.half * 2, towerH + embed, t.half * 2);
-  tgeo.translate(t.x, tgy + (towerH + embed) / 2 - embed, t.z);
+  const towerH = chapel ? 9 : 16;
+  const towerBase = gy + wallH - 1;
+  const tgeo = new THREE.BoxGeometry(t.half * 2, towerH, t.half * 2);
+  tgeo.translate(t.x, towerBase + towerH / 2, t.z);
   towerGeos.push(tgeo);
-  colliders.push({
-    minX: t.x - t.half,
-    maxX: t.x + t.half,
-    minZ: t.z - t.half,
-    maxZ: t.z + t.half,
-  });
 
   const spireH = chapel ? 6 : 15;
   const sp = pyramidPositions(
     t.x,
     t.z,
-    tgy + towerH,
+    towerBase + towerH,
     t.half * 1.05,
     spireH,
     box.ux,
@@ -242,6 +287,105 @@ function buildChurchInto(o) {
     box.vz,
   );
   spireGeos.push(sp);
+}
+
+// Build the hollow, furnished, enterable inside of a church nave.
+function buildChurchInterior(o) {
+  const { box, gy, wallH, chapel, interiorGeos, decorMeshes, colliders } = o;
+  const { cx, cz, ux, uz, vx, vz, L, W } = box;
+  const th = 0.5;
+  const angU = Math.atan2(-uz, ux);
+  const angV = Math.atan2(-vz, vx);
+  const stone = new THREE.Color(0xa79f90);
+  const toWorld = (s, t) => [cx + ux * s + vx * t, cz + uz * s + vz * t];
+
+  const floor = new THREE.BoxGeometry(2 * L, 0.3, 2 * W);
+  floor.rotateY(angU);
+  floor.translate(cx, gy - 0.15, cz);
+  setColorAttr(floor, new THREE.Color(0x8f8676));
+  interiorGeos.push(floor);
+
+  const addWall = (a, b, h, y0, collide) => {
+    const g = wallBoxGeo(a, b, h, y0, th);
+    setColorAttr(g, stone);
+    interiorGeos.push(g);
+    if (collide) pushWallColliders(a, b, colliders, 0.55);
+  };
+
+  // Long side walls.
+  for (const sign of [1, -1]) {
+    addWall(toWorld(-L, sign * W), toWorld(L, sign * W), wallH, gy, true);
+  }
+  // Apse (far) wall, solid.
+  addWall(toWorld(L, -W), toWorld(L, W), wallH, gy, true);
+
+  // Entrance wall with a central doorway.
+  const doorW = chapel ? 2.2 : 3.2;
+  for (const p of doorwayGap(W, doorW)) {
+    addWall(toWorld(-L, p.center - p.half), toWorld(-L, p.center + p.half), wallH, gy, true);
+  }
+  // Lintel over the doorway (no collider, walk under it).
+  const lintelH = 1.1;
+  addWall(
+    toWorld(-L, -doorW / 2 - 0.2),
+    toWorld(-L, doorW / 2 + 0.2),
+    lintelH,
+    gy + wallH - lintelH,
+    false,
+  );
+
+  // Altar near the apse.
+  const [ax, az] = toWorld(L - 1.6, 0);
+  const altar = new THREE.BoxGeometry(1.0, 1.1, 2.0);
+  altar.rotateY(angU);
+  altar.translate(ax, gy + 0.55, az);
+  setColorAttr(altar, new THREE.Color(0xd8cdb4));
+  interiorGeos.push(altar);
+
+  // Pews either side of a central aisle.
+  const wood = new THREE.Color(0x6b4a2f);
+  const aisle = 1.1;
+  const blockHalf = (W * 0.82 - aisle) / 2;
+  if (blockHalf > 0.4) {
+    const blockCenter = aisle + blockHalf;
+    for (let s = -L + 2.2; s <= L - 2.6; s += 1.5) {
+      for (const sign of [1, -1]) {
+        const [px, pz] = toWorld(s, sign * blockCenter);
+        const pg = new THREE.BoxGeometry(blockHalf * 2, 0.85, 0.5);
+        pg.rotateY(angV);
+        pg.translate(px, gy + 0.42, pz);
+        setColorAttr(pg, wood);
+        interiorGeos.push(pg);
+      }
+    }
+  }
+
+  // Stained glass: glowing boxes set into the long walls.
+  const palette = [0x3b6fd6, 0xd64b3b, 0xe3b23c, 0x2fa36b, 0x8a4fc7];
+  const glassN = chapel ? 2 : 3;
+  const glassH = Math.min(3.2, wallH * 0.5);
+  let ci = 0;
+  for (const sign of [1, -1]) {
+    for (let k = 0; k < glassN; k++) {
+      const s = -L + ((k + 1) * 2 * L) / (glassN + 1);
+      const [gx, gz] = toWorld(s, sign * (W - 0.05));
+      const gg = new THREE.BoxGeometry(1.2, glassH, 0.2);
+      gg.rotateY(angU);
+      gg.translate(gx, gy + wallH * 0.52, gz);
+      decorMeshes.push(new THREE.Mesh(gg, new THREE.MeshBasicMaterial({ color: palette[ci % 5] })));
+      ci++;
+    }
+  }
+
+  // Warm fill lights spaced along the nave so the whole interior reads.
+  const nLights = Math.max(2, Math.round((2 * L) / 18));
+  for (let i = 0; i < nLights; i++) {
+    const s = -L + ((i + 0.5) / nLights) * 2 * L;
+    const [lx, lz] = toWorld(s, 0);
+    const light = new THREE.PointLight(0xffe7c4, chapel ? 16 : 30, 42, 1.0);
+    light.position.set(lx, gy + wallH * 0.72, lz);
+    decorMeshes.push(light);
+  }
 }
 
 // A cylindrical stone turret with a conical slate roof (a "poivriere"),
@@ -407,6 +551,8 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const roofGeos = [];
   const towerGeos = [];
   const spireGeos = [];
+  const interiorGeos = [];
+  const decorMeshes = [];
   const waterGeos = [];
   const greenGeos = [];
   const roadPos = [];
@@ -431,10 +577,11 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
         z: cz,
         r: 0.5 * Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ),
       });
-      colliders.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
 
-      // Churches and chapels become landmarks: a tall stone nave, a steep slate
-      // roof, and a bell tower topped by a spire.
+      // Churches and chapels become enterable landmarks: a hollow stone nave with
+      // a doorway, furniture and glowing glass, a steep slate roof, and a bell
+      // tower topped by a spire. They get their own wall colliders (not a solid
+      // footprint block) so the player can walk inside.
       if (isChurch(f.t) || isChapel(f.t)) {
         buildChurchInto({
           pts,
@@ -446,11 +593,15 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
           roofGeos,
           towerGeos,
           spireGeos,
+          interiorGeos,
+          decorMeshes,
           colliders,
         });
         bi++;
         continue;
       }
+
+      colliders.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
 
       const shape = ringToShape(pts);
       if (!shape) continue;
@@ -561,6 +712,23 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     mesh.receiveShadow = true;
     group.add(mesh);
   }
+
+  if (interiorGeos.length) {
+    const merged = mergeGeometries(interiorGeos, false);
+    merged.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.9,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+
+  for (const m of decorMeshes) group.add(m);
 
   if (spireGeos.length) {
     let total = 0;

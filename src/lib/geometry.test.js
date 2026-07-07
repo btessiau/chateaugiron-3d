@@ -7,6 +7,7 @@ import {
   isOversized,
   buildRoadRibbon,
   polygonArea,
+  doorwayGap,
   DEFAULT_ROAD_WIDTH,
   DEFAULT_ROAD_COLOR,
 } from './geometry.js';
@@ -163,5 +164,31 @@ describe('polygonArea', () => {
       [3, 0],
     ];
     expect(polygonArea(ring)).toBe(9);
+  });
+});
+
+describe('doorwayGap', () => {
+  it('returns two symmetric flanking pieces for a centred door', () => {
+    const pieces = doorwayGap(5, 2);
+    expect(pieces).toHaveLength(2);
+    expect(pieces[0].center).toBeCloseTo(-3);
+    expect(pieces[1].center).toBeCloseTo(3);
+    expect(pieces[0].half).toBeCloseTo(2);
+    expect(pieces[1].half).toBeCloseTo(2);
+  });
+  it('treats a non-positive door as one solid wall', () => {
+    expect(doorwayGap(4, 0)).toEqual([{ center: 0, half: 4 }]);
+  });
+  it('returns nothing when the door is as wide as the wall', () => {
+    expect(doorwayGap(3, 6)).toEqual([]);
+    expect(doorwayGap(3, 8)).toEqual([]);
+  });
+  it('drops slivers thinner than the minimum piece', () => {
+    expect(doorwayGap(2, 3.99, 0.1)).toEqual([]);
+  });
+  it('uses the absolute half span', () => {
+    const pieces = doorwayGap(-5, 2);
+    expect(pieces).toHaveLength(2);
+    expect(pieces[0].half).toBeCloseTo(2);
   });
 });

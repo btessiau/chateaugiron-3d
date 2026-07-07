@@ -83,6 +83,25 @@ export function polygonArea(points) {
   return Math.abs(a) / 2;
 }
 
+// Split a wall span into the solid pieces left after cutting a centred doorway.
+// halfSpan is the half length of the wall (so the wall runs from -halfSpan to
+// +halfSpan along its own axis). doorWidth is the clear opening at the centre.
+// Returns pieces as { center, half } in the same axis, dropping slivers.
+export function doorwayGap(halfSpan, doorWidth, minPiece = 0.1) {
+  const h = Math.abs(halfSpan);
+  const d = Math.max(0, doorWidth);
+  if (d <= 0) return [{ center: 0, half: h }];
+  if (d >= 2 * h) return [];
+  const inner = d / 2;
+  const pieceHalf = (h - inner) / 2;
+  if (pieceHalf < minPiece) return [];
+  const c = (h + inner) / 2;
+  return [
+    { center: -c, half: pieceHalf },
+    { center: c, half: pieceHalf },
+  ];
+}
+
 // Turn a polyline into a flat triangle ribbon of a given width, at height y.
 // Returns a flat array of x, y, z triples ready for a BufferGeometry.
 export function buildRoadRibbon(points, width, y) {
