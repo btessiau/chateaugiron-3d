@@ -12,17 +12,23 @@ export function addPhotoPoints(scene, photos, proj, groundY) {
   }
   if (!points.length) return { points, mesh: null };
 
-  const geo = new THREE.OctahedronGeometry(0.5);
+  const geo = new THREE.OctahedronGeometry(1);
   const mat = new THREE.MeshBasicMaterial({
-    color: 0x39d7ff,
+    color: 0x6fd0e6,
     transparent: true,
-    opacity: 0.66,
+    opacity: 0.5,
+    depthWrite: false,
   });
   const mesh = new THREE.InstancedMesh(geo, mat, points.length);
   mesh.name = 'photoMarkers';
+  mesh.renderOrder = 2;
   const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const scl = new THREE.Vector3(0.32, 0.5, 0.32);
+  const pos = new THREE.Vector3();
   points.forEach((pt, i) => {
-    m.makeTranslation(pt.x, groundY(pt.x, pt.z) + 2.7, pt.z);
+    pos.set(pt.x, groundY(pt.x, pt.z) + 3.5, pt.z);
+    m.compose(pos, q, scl);
     mesh.setMatrixAt(i, m);
   });
   mesh.instanceMatrix.needsUpdate = true;

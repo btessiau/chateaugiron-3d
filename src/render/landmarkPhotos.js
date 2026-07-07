@@ -156,7 +156,10 @@ function placeChurchPhotos(scene, ch, manifest, base) {
 }
 
 function placeKeepBoard(scene, kp, manifest, base) {
-  const ext = pick(manifest, 'chateau_exterior', /facade_01/) || pick(manifest, 'chateau_exterior');
+  const ext =
+    pick(manifest, 'chateau_exterior', /exterior_04/) ||
+    pick(manifest, 'chateau_exterior', /facade_01/) ||
+    pick(manifest, 'chateau_exterior');
   if (!ext) return;
   const { kx, kz, gy, rWall, doorA } = kp;
   const aspect = ext.w / ext.h;
@@ -166,7 +169,7 @@ function placeKeepBoard(scene, kp, manifest, base) {
   const dist = rWall + 5;
   const x = kx + dirx * dist;
   const z = kz + dirz * dist;
-  const g = photoPanel(base + ext.file, aspect, ph, capLines(ext, 'Chateau de Chateaugiron'));
+  const g = photoPanel(base + ext.file, aspect, ph, capLines(ext, 'Le donjon'));
   // Front face points outward along the door direction, toward the approach.
   g.rotation.y = Math.atan2(dirx, dirz);
   g.position.set(x, gy + 1.1 + ph / 2, z);

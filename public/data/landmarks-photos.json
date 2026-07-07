@@ -26,6 +26,24 @@
       "author": "GO69",
       "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_Ch%C3%A2teau_Donjon.JPG",
       "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    },
+    {
+      "file": "textures/landmarks/chateau_exterior_02.jpg",
+      "w": 4000,
+      "h": 3000,
+      "license": "CC BY 3.0",
+      "author": "chisloup",
+      "source": "https://commons.wikimedia.org/wiki/File:Chateau_-_panoramio_-_chisloup.jpg",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
+    },
+    {
+      "file": "textures/landmarks/chateau_exterior_04.jpg",
+      "w": 3000,
+      "h": 4000,
+      "license": "CC BY 3.0",
+      "author": "chisloup",
+      "source": "https://commons.wikimedia.org/wiki/File:Chateaugiron_,_le_chateau_-_panoramio.jpg",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
     }
   ],
   "church_exterior": [
