@@ -1,0 +1,19 @@
+{
+  "name": "chateaugiron-3d",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A real, 1:1 scale, walkable Chateaugiron in the browser. Free OpenStreetMap data rendered in three.js.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "fetch-data": "node scripts/fetch-osm.mjs"
+  },
+  "dependencies": {
+    "three": "^0.171.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.7"
+  }
+}
