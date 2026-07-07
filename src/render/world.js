@@ -700,8 +700,17 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const bCentroids = [];
   const colliders = [];
   const woods = [];
-  const landmarks = { church: null, keep: null };
+  const landmarks = { church: null, keep: null, oldtown: [] };
 
+  // A few real old-town buildings get their street front skinned with a
+  // photographed Chateaugiron facade (see src/render/landmarkPhotos.js). Each
+  // entry is matched to the real footprint nearest its centroid; `face` is a
+  // point on the open street side so the correct wall is chosen.
+  const oldTownHosts = [
+    { at: [23.2, 29.1], photo: 'oldtown_facade_02', face: [31.4, 31.7] },
+    { at: [-0.9, -42.1], photo: 'oldtown_facade_01', face: [-1.7, -32.5] },
+    { at: [-37.0, -187.5], photo: 'oldtown_facade_03', face: [-35.0, -193.4] },
+  ];
   let bi = 0;
   for (const f of data.features) {
     const pts = f.g.map(project);
@@ -765,6 +774,24 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       // Pitched slate roof on top of the wall. Skip tiny footprints and very
       // large ones (big commercial or civic blocks read better flat).
       const box = orientedBox(pts);
+
+      // Skin this footprint's street front with a real facade photo when it is
+      // one of the curated old-town hosts.
+      for (const host of oldTownHosts) {
+        if (host.claimed) continue;
+        if (Math.hypot(cx - host.at[0], cz - host.at[1]) <= 2.5) {
+          landmarks.oldtown.push({
+            box,
+            gy: groundY(cx, cz) + base,
+            height: Math.max(1.5, top - base),
+            face: host.face,
+            photo: host.photo,
+          });
+          host.claimed = true;
+          break;
+        }
+      }
+
       const area4 = 4 * box.L * box.W;
       if (box.L >= 1.5 && box.W >= 1.0 && box.W <= 22 && area4 <= 2200) {
         const roofH = Math.min(Math.max(box.W * 0.8, 1.0), 4.5);

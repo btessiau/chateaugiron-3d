@@ -6,6 +6,7 @@
 // credited on an in-world caption under each panel.
 
 import * as THREE from 'three';
+import { facadePlacement, fitFacade } from '../lib/facadeAnchor.js';
 
 const loader = new THREE.TextureLoader();
 
@@ -133,10 +134,29 @@ function placeChurchPhotos(scene, ch, manifest, base) {
     g.position.set(x, gy + wallH * 0.6, z);
     scene.add(g);
   }
+
+  // Heritage board just outside the entrance with the real church facade.
+  const facade =
+    pick(manifest, 'church_exterior', /exterior_03/) ||
+    pick(manifest, 'church_exterior', /exterior_02/);
+  if (facade) {
+    const aspect = facade.w / facade.h;
+    const ph = 3.6;
+    const [x, z] = toWorld(-L - 5, 0);
+    const g = photoPanel(
+      base + facade.file,
+      aspect,
+      ph,
+      capLines(facade, 'Eglise Sainte-Marie-Madeleine'),
+    );
+    g.rotation.y = Math.atan2(-ux, -uz);
+    g.position.set(x, gy + 1.1 + ph / 2, z);
+    scene.add(g);
+  }
 }
 
 function placeKeepBoard(scene, kp, manifest, base) {
-  const ext = pick(manifest, 'chateau_exterior', /facade_02/) || pick(manifest, 'chateau_exterior');
+  const ext = pick(manifest, 'chateau_exterior', /facade_01/) || pick(manifest, 'chateau_exterior');
   if (!ext) return;
   const { kx, kz, gy, rWall, doorA } = kp;
   const aspect = ext.w / ext.h;
@@ -153,6 +173,67 @@ function placeKeepBoard(scene, kp, manifest, base) {
   scene.add(g);
 }
 
+// A small heritage plaque (title + credit) mounted low on a house wall, the way
+// French old towns label their protected facades. Returned as a mesh in the XY
+// plane, front +Z, to be oriented and placed by the caller.
+function plaque(caption) {
+  const ct = captionTexture(caption);
+  if (!ct) return null;
+  const w = 1.5;
+  const h = w * 0.29;
+  const grp = new THREE.Group();
+  const back = new THREE.Mesh(
+    new THREE.PlaneGeometry(w + 0.08, h + 0.08),
+    new THREE.MeshBasicMaterial({ color: 0x140f0a, side: THREE.DoubleSide }),
+  );
+  back.position.z = -0.01;
+  grp.add(back);
+  const face = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: ct, side: THREE.DoubleSide }),
+  );
+  grp.add(face);
+  return grp;
+}
+
+// Skin a handful of real old-town building fronts with photographed Chateaugiron
+// facades so they read as the actual half-timbered houses, with a small credit
+// plaque mounted low on the wall.
+function placeOldTownFacades(scene, hosts, manifest, base) {
+  const arr = manifest.oldtown_facade || [];
+  for (const host of hosts) {
+    const entry = arr.find((e) => e.file.includes(host.photo));
+    if (!entry) continue;
+    const pl = facadePlacement(host.box, host.face[0], host.face[1]);
+    const aspect = entry.w / entry.h;
+    const { w, h, centerY } = fitFacade(pl.width * 0.98, host.height, aspect);
+    const proud = 0.08;
+    const photo = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ map: loadTex(base + entry.file), side: THREE.DoubleSide }),
+    );
+    photo.rotation.y = pl.yaw;
+    photo.position.set(pl.x + pl.normalX * proud, host.gy + centerY, pl.z + pl.normalZ * proud);
+    scene.add(photo);
+
+    const pq = plaque(capLines(entry, 'Maison a pans de bois'));
+    if (pq) {
+      pq.rotation.y = pl.yaw;
+      pq.position.set(
+        pl.x + pl.normalX * (proud + 0.02),
+        host.gy + 1.4,
+        pl.z + pl.normalZ * (proud + 0.02),
+      );
+      // Nudge the plaque toward one side of the wall so it does not cover a door.
+      const sx = -Math.sin(pl.yaw);
+      const sz = Math.cos(pl.yaw);
+      pq.position.x += sx * (w / 2 - 1.0);
+      pq.position.z += sz * (w / 2 - 1.0);
+      scene.add(pq);
+    }
+  }
+}
+
 export async function addLandmarkPhotos(scene, landmarks, base = './') {
   if (!landmarks) return null;
   let manifest = null;
@@ -165,5 +246,8 @@ export async function addLandmarkPhotos(scene, landmarks, base = './') {
   if (!manifest) return null;
   if (landmarks.church) placeChurchPhotos(scene, landmarks.church, manifest, base);
   if (landmarks.keep) placeKeepBoard(scene, landmarks.keep, manifest, base);
+  if (landmarks.oldtown && landmarks.oldtown.length) {
+    placeOldTownFacades(scene, landmarks.oldtown, manifest, base);
+  }
   return manifest;
 }
