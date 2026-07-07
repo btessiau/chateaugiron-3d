@@ -70,7 +70,7 @@ const skyEnv = pmrem.fromScene(sky, 0, 0.1, 100000).texture;
 pmrem.dispose();
 
 // ---- Lights ----
-const hemi = new THREE.HemisphereLight(0xbcd3ff, 0x6a6350, 0.95);
+const hemi = new THREE.HemisphereLight(0xc4d8ff, 0x8a8168, 1.1);
 scene.add(hemi);
 
 const sun = new THREE.DirectionalLight(0xfff1dd, 2.6);
@@ -84,6 +84,13 @@ Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near:
 sun.shadow.camera.updateProjectionMatrix();
 scene.add(sun);
 scene.add(sun.target);
+
+// Soft sky fill from the shaded side so north faces and foliage undersides do
+// not read as black. No shadows and low intensity, so it lifts the dark sides
+// without flattening the sunlit look.
+const fill = new THREE.DirectionalLight(0xaec6ea, 0.5);
+fill.position.set(-sunDir.x * 600, 420, -sunDir.z * 600);
+scene.add(fill);
 
 // ---- Walker ----
 let player = null;

@@ -200,10 +200,10 @@ function makeTreeGeometry() {
   const c1 = new THREE.IcosahedronGeometry(1.6, 0);
   c1.scale(1, 0.9, 1);
   c1.translate(0, 2.7, 0);
-  paint(c1, new THREE.Color(0x3f6b32));
+  paint(c1, new THREE.Color(0x5a8a45));
   const c2 = new THREE.IcosahedronGeometry(1.15, 0);
   c2.translate(0.5, 3.7, 0.2);
-  paint(c2, new THREE.Color(0x4c7d3a));
+  paint(c2, new THREE.Color(0x71a052));
   return mergeGeometries([trunk, c1, c2], false);
 }
 
@@ -625,7 +625,7 @@ function instanceTrees(placements, groundY) {
     mesh.setMatrixAt(i, m);
     // Per-tree tint so the woodland is not one flat green: vary brightness and
     // nudge warm/cool. instanceColor multiplies the canopy and trunk colours.
-    const b = 0.72 + fract01(Math.sin(i * 3.71) * 9137.13) * 0.3;
+    const b = 0.85 + fract01(Math.sin(i * 3.71) * 9137.13) * 0.22;
     const w = (fract01(Math.sin(i * 1.73) * 3571.31) - 0.5) * 0.14;
     col.setRGB(Math.min(1, b * (1 + w)), Math.min(1, b * 1.04), Math.min(1, b * (1 - w * 0.6)));
     mesh.setColorAt(i, col);
