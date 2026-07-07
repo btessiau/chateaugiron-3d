@@ -8,6 +8,7 @@ import { buildingHeight, baseHeight } from '../lib/osm.js';
 import { pickSpawn } from '../lib/spawn.js';
 import { orientedBox, gableRoofPositions } from '../lib/roof.js';
 import { scatterInPolygon } from '../lib/scatter.js';
+import { isChurch, isChapel, towerPlacement, pyramidPositions } from '../lib/landmark.js';
 import {
   roadWidth,
   roadColor,
@@ -180,6 +181,68 @@ function treeSpacing(tags) {
   return 8;
 }
 
+// Turn a church or chapel footprint into a landmark: a tall stone nave, a steep
+// slate roof, and a square bell tower topped by a pyramidal spire. Pushes into
+// the shared geometry buckets so everything merges into a few meshes.
+function buildChurchInto(o) {
+  const { pts, tags, cx, cz, groundY, buildingGeos, roofGeos, towerGeos, spireGeos, colliders } = o;
+  const chapel = isChapel(tags) && !isChurch(tags);
+  const embed = 1.5;
+  const wallH = chapel ? 6.5 : 11;
+  const shape = ringToShape(pts);
+  if (!shape) return;
+  const gy = groundY(cx, cz);
+
+  let geo;
+  try {
+    geo = new THREE.ExtrudeGeometry(shape, { depth: wallH + embed, bevelEnabled: false, steps: 1 });
+  } catch {
+    return;
+  }
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, gy - embed, 0);
+  setColorAttr(geo, new THREE.Color(0x9c9484));
+  buildingGeos.push(geo);
+
+  const box = orientedBox(pts);
+  if (box.L >= 1.5 && box.W >= 1.0) {
+    const roofH = Math.min(Math.max(box.W * 1.05, 2.0), 7.5);
+    const rp = gableRoofPositions(box, gy + wallH, roofH);
+    const rgeo = new THREE.BufferGeometry();
+    rgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(rp), 3));
+    rgeo.computeVertexNormals();
+    setColorAttr(rgeo, new THREE.Color(0x333b47));
+    roofGeos.push(rgeo);
+  }
+
+  const t = towerPlacement(box);
+  const tgy = groundY(t.x, t.z);
+  const towerH = chapel ? 10 : 21;
+  const tgeo = new THREE.BoxGeometry(t.half * 2, towerH + embed, t.half * 2);
+  tgeo.translate(t.x, tgy + (towerH + embed) / 2 - embed, t.z);
+  towerGeos.push(tgeo);
+  colliders.push({
+    minX: t.x - t.half,
+    maxX: t.x + t.half,
+    minZ: t.z - t.half,
+    maxZ: t.z + t.half,
+  });
+
+  const spireH = chapel ? 6 : 15;
+  const sp = pyramidPositions(
+    t.x,
+    t.z,
+    tgy + towerH,
+    t.half * 1.05,
+    spireH,
+    box.ux,
+    box.uz,
+    box.vx,
+    box.vz,
+  );
+  spireGeos.push(sp);
+}
+
 // Build one InstancedMesh for a list of tree placements ({ x, z, s }).
 function instanceTrees(placements, groundY) {
   if (!placements.length) return null;
@@ -264,6 +327,8 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
 
   const buildingGeos = [];
   const roofGeos = [];
+  const towerGeos = [];
+  const spireGeos = [];
   const waterGeos = [];
   const greenGeos = [];
   const roadPos = [];
@@ -289,6 +354,25 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
         r: 0.5 * Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ),
       });
       colliders.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
+
+      // Churches and chapels become landmarks: a tall stone nave, a steep slate
+      // roof, and a bell tower topped by a spire.
+      if (isChurch(f.t) || isChapel(f.t)) {
+        buildChurchInto({
+          pts,
+          tags: f.t,
+          cx,
+          cz,
+          groundY,
+          buildingGeos,
+          roofGeos,
+          towerGeos,
+          spireGeos,
+          colliders,
+        });
+        bi++;
+        continue;
+      }
 
       const shape = ringToShape(pts);
       if (!shape) continue;
@@ -384,6 +468,42 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+
+  if (towerGeos.length) {
+    const merged = mergeGeometries(towerGeos, false);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x9c9484,
+      roughness: 0.85,
+      metalness: 0.0,
+    });
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+
+  if (spireGeos.length) {
+    let total = 0;
+    for (const s of spireGeos) total += s.length;
+    const arr = new Float32Array(total);
+    let off = 0;
+    for (const s of spireGeos) {
+      arr.set(s, off);
+      off += s.length;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x2f3743,
+      roughness: 0.6,
+      metalness: 0.12,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
     group.add(mesh);
   }
 
