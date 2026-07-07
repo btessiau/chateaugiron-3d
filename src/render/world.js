@@ -252,6 +252,12 @@ function buildChurchInto(o) {
 
   if (box.L >= 4 && box.W >= 3) {
     buildChurchInterior({ box, gy, wallH, chapel, interiorGeos, decorMeshes, colliders });
+    if (o.landmarks && !chapel) {
+      const area = box.L * box.W;
+      if (!o.landmarks.church || area > o.landmarks.church.area) {
+        o.landmarks.church = { box, gy, wallH, area };
+      }
+    }
   } else {
     // Too small to hollow out cleanly: keep a solid stone block.
     const shape = ringToShape(pts);
@@ -497,7 +503,7 @@ function buildKeepInterior(group, o) {
 // The Chateau de Chateaugiron: its signature is a tall round crenellated keep
 // (the "grosse tour"). Placed at the real keep location, with two pepperpot
 // turrets on the logis. Authored geometry, verified by screenshot.
-function buildChateau(group, groundY, colliders) {
+function buildChateau(group, groundY, colliders, landmarks = null) {
   const stone = new THREE.MeshStandardMaterial({ color: 0x8f887b, roughness: 0.9, metalness: 0.0 });
   const darkStone = new THREE.MeshStandardMaterial({
     color: 0x7d766a,
@@ -557,6 +563,9 @@ function buildChateau(group, groundY, colliders) {
   shaft.receiveShadow = true;
   group.add(shaft);
   buildKeepInterior(group, { kx, kz, gy, shaftH, rWall, N, doorA });
+  if (landmarks) {
+    landmarks.keep = { kx, kz, gy, rWall, shaftH, doorA };
+  }
 
   // Corbel band (machicolation) just under the parapet.
   const band = new THREE.Mesh(new THREE.CylinderGeometry(rTop + 0.6, rTop, 1.6, 18), darkStone);
@@ -691,6 +700,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const bCentroids = [];
   const colliders = [];
   const woods = [];
+  const landmarks = { church: null, keep: null };
 
   let bi = 0;
   for (const f of data.features) {
@@ -727,6 +737,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
           interiorGeos,
           decorMeshes,
           colliders,
+          landmarks,
         });
         bi++;
         continue;
@@ -915,7 +926,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   scene.add(group);
 
   buildTrees(group, woods, groundY);
-  buildChateau(group, groundY, colliders);
+  buildChateau(group, groundY, colliders, landmarks);
 
   return {
     bounds,
@@ -923,6 +934,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     spawn: pickSpawn(bCentroids),
     colliders,
     waterGeo,
+    landmarks,
     disposed: () => {},
   };
 }

@@ -14,6 +14,7 @@ import { Avatar } from './render/avatar.js';
 import { Minimap } from './render/minimap.js';
 import { compassFromYaw } from './lib/minimap.js';
 import { addPhotoPoints } from './render/photos.js';
+import { addLandmarkPhotos } from './render/landmarkPhotos.js';
 import { nearestIndex } from './lib/nearest.js';
 
 const app = document.getElementById('app');
@@ -201,6 +202,14 @@ async function init() {
     }
   } catch (err) {
     console.warn('No street photos.', err);
+  }
+
+  // Real CC-licensed landmark photos: the actual church altar and organ inside
+  // the church, and a heritage board with the real château by the keep gate.
+  try {
+    await addLandmarkPhotos(scene, world.landmarks, import.meta.env.BASE_URL);
+  } catch (err) {
+    console.warn('No landmark photos.', err);
   }
 
   // Animated CC0 avatar for third person. Optional.

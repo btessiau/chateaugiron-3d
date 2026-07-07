@@ -1,0 +1,169 @@
+// Places real, openly licensed photographs of Châteaugiron's landmarks into
+// the scene: the actual Sainte-Marie-Madeleine altar and organ inside the
+// church, and a heritage board with the real château by the keep gate. The
+// image list and licences come from public/data/landmarks-photos.json, fetched
+// by scripts/fetch-wikimedia.mjs. All images are CC0 / CC BY / CC BY-SA and are
+// credited on an in-world caption under each panel.
+
+import * as THREE from 'three';
+
+const loader = new THREE.TextureLoader();
+
+function loadTex(url) {
+  const t = loader.load(url);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+// A small dark caption card: title on top, author and licence below.
+function captionTexture(lines) {
+  if (typeof document === 'undefined' || !document.createElement) return null;
+  const w = 512;
+  const h = 150;
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#1b1610';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#ece4d3';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 34px Georgia, serif';
+  ctx.fillText(lines[0] || '', 18, 42);
+  ctx.font = '22px Georgia, serif';
+  ctx.fillStyle = '#c6bca6';
+  ctx.fillText(lines[1] || '', 18, 92);
+  ctx.fillText(lines[2] || '', 18, 124);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function capLines(entry, title) {
+  const by = entry.author ? `© ${entry.author}` : '© Wikimedia Commons';
+  return [title, by, `${entry.license} · Wikimedia Commons`];
+}
+
+// A framed, unlit photo panel of the given height, keeping the image aspect,
+// with an optional caption card hung just below it. Built in the XY plane with
+// its front face pointing +Z, then oriented and positioned by the caller.
+function photoPanel(url, aspect, height, caption) {
+  const grp = new THREE.Group();
+  const w = height * aspect;
+  const photo = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, height),
+    new THREE.MeshBasicMaterial({ map: loadTex(url), side: THREE.DoubleSide }),
+  );
+  grp.add(photo);
+  const frame = new THREE.Mesh(
+    new THREE.PlaneGeometry(w + 0.26, height + 0.26),
+    new THREE.MeshBasicMaterial({ color: 0x241c12, side: THREE.DoubleSide }),
+  );
+  frame.position.z = -0.03;
+  grp.add(frame);
+  if (caption) {
+    const ct = captionTexture(caption);
+    if (ct) {
+      const cw = w + 0.26;
+      const chh = cw * 0.16;
+      const cap = new THREE.Mesh(
+        new THREE.PlaneGeometry(cw, chh),
+        new THREE.MeshBasicMaterial({ map: ct, side: THREE.DoubleSide }),
+      );
+      cap.position.set(0, -height / 2 - chh / 2 - 0.1, 0.01);
+      grp.add(cap);
+    }
+  }
+  return grp;
+}
+
+function pick(manifest, cat, re) {
+  const arr = manifest[cat];
+  if (!arr || !arr.length) return null;
+  if (re) return arr.find((e) => re.test(e.file)) || null;
+  return arr[0];
+}
+
+// Y rotation that aligns the panel's local X with the short axis (vx, vz) and
+// then flips it so its front face points from `from` toward `to`.
+function faceAngle(vx, vz, fromX, fromZ, toX, toZ) {
+  const base = Math.atan2(-vz, vx);
+  const nx = -vz;
+  const nz = vx;
+  const dx = toX - fromX;
+  const dz = toZ - fromZ;
+  return nx * dx + nz * dz < 0 ? base + Math.PI : base;
+}
+
+function placeChurchPhotos(scene, ch, manifest, base) {
+  const { box, gy, wallH } = ch;
+  const { cx, cz, ux, uz, vx, vz, L, W } = box;
+  const toWorld = (s, t) => [cx + ux * s + vx * t, cz + uz * s + vz * t];
+  const [doorX, doorZ] = toWorld(-L, 0);
+  const [apseX, apseZ] = toWorld(L, 0);
+
+  // Real altarpiece raised behind the 3D altar table, at the apse.
+  const altar = pick(manifest, 'church_interior', /altar/) || pick(manifest, 'church_interior');
+  if (altar) {
+    const aspect = altar.w / altar.h;
+    let ph = wallH * 0.62;
+    if (ph * aspect > 2 * W * 0.8) ph = (2 * W * 0.8) / aspect;
+    const [x, z] = toWorld(L - 0.45, 0);
+    const g = photoPanel(
+      base + altar.file,
+      aspect,
+      ph,
+      capLines(altar, 'Maitre-autel, Sainte-Marie-Madeleine'),
+    );
+    g.rotation.y = faceAngle(vx, vz, x, z, doorX, doorZ);
+    g.position.set(x, gy + 1.7 + ph / 2, z);
+    scene.add(g);
+  }
+
+  // Real organ over the entrance, facing back down the nave.
+  const organ = pick(manifest, 'church_interior', /organ/);
+  if (organ) {
+    const aspect = organ.w / organ.h;
+    let ph = wallH * 0.42;
+    if (ph * aspect > 2 * W * 0.55) ph = (2 * W * 0.55) / aspect;
+    const [x, z] = toWorld(-L + 0.45, 0);
+    const g = photoPanel(base + organ.file, aspect, ph, capLines(organ, 'Orgue de tribune'));
+    g.rotation.y = faceAngle(vx, vz, x, z, apseX, apseZ);
+    g.position.set(x, gy + wallH * 0.6, z);
+    scene.add(g);
+  }
+}
+
+function placeKeepBoard(scene, kp, manifest, base) {
+  const ext = pick(manifest, 'chateau_exterior', /facade_02/) || pick(manifest, 'chateau_exterior');
+  if (!ext) return;
+  const { kx, kz, gy, rWall, doorA } = kp;
+  const aspect = ext.w / ext.h;
+  const ph = 3.4;
+  const dirx = Math.cos(doorA);
+  const dirz = Math.sin(doorA);
+  const dist = rWall + 5;
+  const x = kx + dirx * dist;
+  const z = kz + dirz * dist;
+  const g = photoPanel(base + ext.file, aspect, ph, capLines(ext, 'Chateau de Chateaugiron'));
+  // Front face points outward along the door direction, toward the approach.
+  g.rotation.y = Math.atan2(dirx, dirz);
+  g.position.set(x, gy + 1.1 + ph / 2, z);
+  scene.add(g);
+}
+
+export async function addLandmarkPhotos(scene, landmarks, base = './') {
+  if (!landmarks) return null;
+  let manifest = null;
+  try {
+    const res = await fetch(`${base}data/landmarks-photos.json`);
+    if (res.ok) manifest = await res.json();
+  } catch {
+    manifest = null;
+  }
+  if (!manifest) return null;
+  if (landmarks.church) placeChurchPhotos(scene, landmarks.church, manifest, base);
+  if (landmarks.keep) placeKeepBoard(scene, landmarks.keep, manifest, base);
+  return manifest;
+}

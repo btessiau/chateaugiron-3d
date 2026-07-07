@@ -1,0 +1,118 @@
+{
+  "chateau_exterior": [
+    {
+      "file": "textures/landmarks/chateau_facade_01.jpg",
+      "w": 1920,
+      "h": 1277,
+      "license": "CC BY-SA 4.0",
+      "author": "Chateaugiron",
+      "source": "https://commons.wikimedia.org/wiki/File:Fa%C3%A7ade_avant_ch%C3%A2teau_-_Ville_de_Ch%C3%A2teaugiron.JPG",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    },
+    {
+      "file": "textures/landmarks/chateau_facade_02.jpg",
+      "w": 1920,
+      "h": 1280,
+      "license": "CC BY-SA 3.0",
+      "author": "Otourly",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teau_de_Ch%C3%A2teaugiron_-_10.jpg",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0"
+    },
+    {
+      "file": "textures/landmarks/chateau_facade_03.jpg",
+      "w": 1786,
+      "h": 1255,
+      "license": "CC BY-SA 4.0",
+      "author": "GO69",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_Ch%C3%A2teau_Donjon.JPG",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ],
+  "church_exterior": [
+    {
+      "file": "textures/landmarks/church_exterior_01.jpg",
+      "w": 1920,
+      "h": 1080,
+      "license": "CC BY-SA 4.0",
+      "author": "Laemito",
+      "source": "https://commons.wikimedia.org/wiki/File:%C3%89glise_de_Chateaugiron_illumin%C3%A9e.jpg",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    },
+    {
+      "file": "textures/landmarks/church_exterior_02.jpg",
+      "w": 1920,
+      "h": 3413,
+      "license": "CC BY-SA 4.0",
+      "author": "Laemito",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_%C3%A9glise.jpg",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    },
+    {
+      "file": "textures/landmarks/church_exterior_03.jpg",
+      "w": 1512,
+      "h": 2016,
+      "license": "CC BY-SA 2.5",
+      "author": "Thomas Béline (izidor)",
+      "source": "https://commons.wikimedia.org/wiki/File:Eglise_de_Ch%C3%A2teaugiron.JPG",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.5"
+    }
+  ],
+  "church_interior": [
+    {
+      "file": "textures/landmarks/church_interior_nave_01.jpg",
+      "w": 1920,
+      "h": 1082,
+      "license": "CC BY 4.0",
+      "author": "GO69",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_%C3%89glise_Sainte-Marie-Madeleine_-_Int%C3%A9rieur_-_03.jpg",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0"
+    },
+    {
+      "file": "textures/landmarks/church_interior_altar_01.jpg",
+      "w": 893,
+      "h": 1191,
+      "license": "CC BY-SA 4.0",
+      "author": "GO69",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_%C3%89glise_Sainte-Marie-Madeleine_-_Int%C3%A9rieur_-_Ma%C3%AEtre-autel_-_01.jpg",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    },
+    {
+      "file": "textures/landmarks/church_interior_organ_01.jpg",
+      "w": 893,
+      "h": 1191,
+      "license": "CC BY-SA 4.0",
+      "author": "GO69",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_%C3%89glise_Sainte-Marie-Madeleine_-_Int%C3%A9rieur_-_Orgue.jpg",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+    }
+  ],
+  "oldtown_facade": [
+    {
+      "file": "textures/landmarks/oldtown_facade_01.jpg",
+      "w": 1191,
+      "h": 893,
+      "license": "CC0",
+      "author": "GO69",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_Maison_du_ch%C3%AAne_vert.jpg",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en"
+    },
+    {
+      "file": "textures/landmarks/oldtown_facade_02.jpg",
+      "w": 1920,
+      "h": 1440,
+      "license": "CC BY-SA 2.5",
+      "author": "Thomas Béline (izidor)",
+      "source": "https://commons.wikimedia.org/wiki/File:Maison_en_colombage_%C3%A0_chateaugiron.JPG",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.5"
+    },
+    {
+      "file": "textures/landmarks/oldtown_facade_03.jpg",
+      "w": 792,
+      "h": 1057,
+      "license": "CC0",
+      "author": "GO69",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_Vieille_maison_rue_du_porche.jpg",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en"
+    }
+  ]
+}
