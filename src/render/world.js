@@ -405,6 +405,78 @@ function addTurret(group, x, z, gy, radius, height, coneH, stoneMat, slateMat) {
   group.add(cone);
 }
 
+// Furnish the inside of the keep: a stone floor, a wooden mezzanine reached by
+// a spiral stair up the wall, glowing arrow slits, and warm interior light.
+function buildKeepInterior(group, o) {
+  const { kx, kz, gy, rWall, N, doorA } = o;
+  const stoneFloor = new THREE.MeshStandardMaterial({
+    color: 0x8a8272,
+    roughness: 0.95,
+    metalness: 0,
+  });
+  const wood = new THREE.MeshStandardMaterial({
+    color: 0x6b4a2f,
+    roughness: 0.9,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const stepMat = new THREE.MeshStandardMaterial({
+    color: 0x7d766a,
+    roughness: 0.95,
+    metalness: 0,
+  });
+  const slitMat = new THREE.MeshBasicMaterial({ color: 0xfff2d0 });
+
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(rWall - 0.4, N), stoneFloor);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(kx, gy + 0.05, kz);
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  const galleryY = gy + 9;
+  const gallery = new THREE.Mesh(new THREE.RingGeometry(2.8, rWall - 0.5, N), wood);
+  gallery.rotation.x = -Math.PI / 2;
+  gallery.position.set(kx, galleryY, kz);
+  gallery.receiveShadow = true;
+  gallery.castShadow = true;
+  group.add(gallery);
+
+  // Spiral stair rising to the mezzanine, starting opposite the doorway.
+  const steps = 20;
+  const rStair = rWall - 1.5;
+  for (let k = 0; k < steps; k++) {
+    const a = doorA + Math.PI + (k / steps) * 1.15 * Math.PI * 2;
+    const st = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.28, 1.0), stepMat);
+    st.rotation.y = -a;
+    st.position.set(
+      kx + Math.cos(a) * rStair,
+      gy + 0.28 + (k / steps) * (galleryY - gy),
+      kz + Math.sin(a) * rStair,
+    );
+    st.castShadow = true;
+    group.add(st);
+  }
+
+  // Glowing arrow slits on a few facets, at three heights.
+  const step = (Math.PI * 2) / N;
+  for (const i of [5, 8, 11, 14]) {
+    const a = i * step;
+    for (const yy of [gy + 5, gy + 13, gy + 20]) {
+      const slit = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.8, 0.25), slitMat);
+      slit.rotation.y = -a - Math.PI / 2;
+      slit.position.set(kx + Math.cos(a) * (rWall - 0.05), yy, kz + Math.sin(a) * (rWall - 0.05));
+      group.add(slit);
+    }
+  }
+
+  // Warm interior light on two levels.
+  for (const yy of [gy + 4, gy + 14]) {
+    const l = new THREE.PointLight(0xffe0b0, 24, 34, 1.0);
+    l.position.set(kx, yy, kz);
+    group.add(l);
+  }
+}
+
 // The Chateau de Chateaugiron: its signature is a tall round crenellated keep
 // (the "grosse tour"). Placed at the real keep location, with two pepperpot
 // turrets on the logis. Authored geometry, verified by screenshot.
@@ -421,18 +493,53 @@ function buildChateau(group, groundY, colliders) {
     metalness: 0.12,
   });
 
-  // Round keep (donjon).
+  // Round keep (donjon), built as a faceted wall with a doorway so the great
+  // tower is enterable. Facets approximate the drum and each gets a collider,
+  // except the two that form the entrance arch.
   const kx = -77;
   const kz = -27;
   const gy = groundY(kx, kz);
   const shaftH = 27;
   const rTop = 6.2;
-  const rBot = 6.9;
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, shaftH, 18), stone);
-  shaft.position.set(kx, gy + shaftH / 2, kz);
+  const rWall = 6.5;
+  const N = 18;
+  const step = (Math.PI * 2) / N;
+  const doorA = 0.95; // faces north-east, toward the town centre
+  const lower = Math.floor(doorA / step);
+  const openSet = new Set([((lower % N) + N) % N, (((lower + 1) % N) + N) % N]);
+  const chord = 2 * rWall * Math.sin(step / 2) + 0.35;
+
+  const wallGeos = [];
+  for (let i = 0; i < N; i++) {
+    const a = i * step;
+    const wx = kx + Math.cos(a) * rWall;
+    const wz = kz + Math.sin(a) * rWall;
+    if (openSet.has(i)) {
+      // Doorway: keep only the wall above the lintel so it reads as a gate.
+      const lintelBase = gy + 4.6;
+      const h = gy + shaftH - lintelBase;
+      const lg = new THREE.BoxGeometry(chord, h, 0.7);
+      lg.rotateY(-a - Math.PI / 2);
+      lg.translate(wx, lintelBase + h / 2, wz);
+      wallGeos.push(lg);
+      continue;
+    }
+    const g = new THREE.BoxGeometry(chord, shaftH, 0.7);
+    g.rotateY(-a - Math.PI / 2);
+    g.translate(wx, gy + shaftH / 2, wz);
+    wallGeos.push(g);
+    colliders.push({
+      minX: wx - chord / 2,
+      maxX: wx + chord / 2,
+      minZ: wz - chord / 2,
+      maxZ: wz + chord / 2,
+    });
+  }
+  const shaft = new THREE.Mesh(mergeGeometries(wallGeos, false), stone);
   shaft.castShadow = true;
   shaft.receiveShadow = true;
   group.add(shaft);
+  buildKeepInterior(group, { kx, kz, gy, shaftH, rWall, N, doorA });
 
   // Corbel band (machicolation) just under the parapet.
   const band = new THREE.Mesh(new THREE.CylinderGeometry(rTop + 0.6, rTop, 1.6, 18), darkStone);
@@ -452,7 +559,6 @@ function buildChateau(group, groundY, colliders) {
     merlon.castShadow = true;
     group.add(merlon);
   }
-  colliders.push({ minX: kx - rBot, maxX: kx + rBot, minZ: kz - rBot, maxZ: kz + rBot });
 
   // Two pepperpot turrets flanking the logis.
   for (const [tx, tz] of [
