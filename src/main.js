@@ -3,9 +3,11 @@
 // walk it in first person.
 
 import * as THREE from 'three';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { makeProjector, metresToLatLon } from './lib/geo.js';
 import { makeHeightField } from './lib/terrain.js';
 import { buildGrid, collide } from './lib/collision.js';
+import { sunPosition } from './lib/sun.js';
 import { buildWorld, buildTerrain, buildGround, addTreePoints } from './render/world.js';
 import { Player } from './render/player.js';
 import { Avatar } from './render/avatar.js';
@@ -29,17 +31,30 @@ app.appendChild(renderer.domElement);
 
 // ---- Scene, sky, fog ----
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xaccbef);
-scene.fog = new THREE.Fog(0xbdd2ea, 420, 1600);
+scene.fog = new THREE.Fog(0xbdd2ea, 500, 1900);
 
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 4000);
 
+// Physical sky dome with a sun disc. The sun direction is shared with the
+// directional light below so shadows line up with the visible sun.
+const SUN_ELEV = 42;
+const SUN_AZIM = 138;
+const sunDir = sunPosition(SUN_ELEV, SUN_AZIM, 1);
+const sky = new Sky();
+sky.scale.setScalar(10000);
+sky.material.uniforms.turbidity.value = 3.2;
+sky.material.uniforms.rayleigh.value = 1.4;
+sky.material.uniforms.mieCoefficient.value = 0.006;
+sky.material.uniforms.mieDirectionalG.value = 0.8;
+sky.material.uniforms.sunPosition.value.set(sunDir.x, sunDir.y, sunDir.z);
+scene.add(sky);
+
 // ---- Lights ----
-const hemi = new THREE.HemisphereLight(0xbcd3ff, 0x55503f, 0.8);
+const hemi = new THREE.HemisphereLight(0xbcd3ff, 0x55503f, 0.7);
 scene.add(hemi);
 
-const sun = new THREE.DirectionalLight(0xfff1dd, 2.5);
-sun.position.set(-360, 520, 280);
+const sun = new THREE.DirectionalLight(0xfff1dd, 2.6);
+sun.position.set(sunDir.x * 700, sunDir.y * 700, sunDir.z * 700);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.bias = -0.0004;
