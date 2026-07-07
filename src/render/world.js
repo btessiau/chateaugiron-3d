@@ -1033,6 +1033,12 @@ function addGroundDetail(mat, featherHalf = null) {
 {
   float n = gNoise(vGroundXZ*0.7)*0.55 + gNoise(vGroundXZ*2.7)*0.3 + gNoise(vGroundXZ*8.0)*0.15;
   diffuseColor.rgb *= (0.82 + 0.36*n);
+}
+{
+  float gd = distance(cameraPosition.xz, vGroundXZ);
+  float gnear = 1.0 - smoothstep(3.0, 16.0, gd);
+  float gfine = gNoise(vGroundXZ*6.5)*0.5 + gNoise(vGroundXZ*21.0)*0.5;
+  diffuseColor.rgb *= mix(1.0, 0.74 + 0.5*gfine, gnear);
 }`;
     if (featherHalf) {
       grain += `
