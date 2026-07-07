@@ -59,6 +59,91 @@ function slateColor(i) {
   return new THREE.Color().setHSL(hue, sat, lig);
 }
 
+// A tiling window pattern drawn on a canvas. One window per tile; the building
+// material repeats it across facades in world units so windows are life sized.
+function makeFacadeTexture() {
+  const s = 128;
+  const cv =
+    typeof document !== 'undefined' && document.createElement
+      ? document.createElement('canvas')
+      : null;
+  if (!cv) return null;
+  cv.width = s;
+  cv.height = s;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#f0ebe1'; // near-white so the stone vertex colour shows
+  ctx.fillRect(0, 0, s, s);
+
+  // Window opening.
+  const x0 = s * 0.28;
+  const y0 = s * 0.14;
+  const w = s * 0.44;
+  const h = s * 0.6;
+  ctx.fillStyle = '#c8bfae'; // stone frame
+  ctx.fillRect(x0 - 4, y0 - 4, w + 8, h + 8);
+  ctx.fillStyle = '#3d4a57'; // glass
+  ctx.fillRect(x0, y0, w, h);
+  // Mullions.
+  ctx.strokeStyle = '#e7e0d3';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x0 + w / 2, y0);
+  ctx.lineTo(x0 + w / 2, y0 + h);
+  ctx.moveTo(x0, y0 + h / 2);
+  ctx.lineTo(x0 + w, y0 + h / 2);
+  ctx.stroke();
+  // Sill.
+  ctx.fillStyle = '#b7ad9b';
+  ctx.fillRect(x0 - 5, y0 + h + 3, w + 10, 4);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Multiply a tiling facade texture onto the vertical walls of the merged
+// building mesh, in world space, leaving roofs and flat tops untouched.
+function applyFacade(mat, tex) {
+  if (!tex) return;
+  const scale = 1 / 3.0; // one window tile per ~3 m
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uFacade = { value: tex };
+    shader.uniforms.uFacadeScale = { value: scale };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWN;')
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n  vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+      )
+      .replace(
+        '#include <beginnormal_vertex>',
+        '#include <beginnormal_vertex>\n  vWN = normalize(mat3(modelMatrix) * objectNormal);',
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform sampler2D uFacade;\nuniform float uFacadeScale;\nvarying vec3 vWPos;\nvarying vec3 vWN;',
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        {
+          vec3 n = normalize(vWN);
+          float up = smoothstep(0.45, 0.8, abs(n.y));
+          float wx = abs(n.x);
+          float wz = abs(n.z);
+          float sum = wx + wz + 1e-4;
+          vec3 tx = texture2D(uFacade, vWPos.zy * uFacadeScale).rgb;
+          vec3 tz = texture2D(uFacade, vWPos.xy * uFacadeScale).rgb;
+          vec3 wall = (tx * wx + tz * wz) / sum;
+          diffuseColor.rgb = mix(diffuseColor.rgb * wall, diffuseColor.rgb, up);
+        }`,
+      );
+  };
+}
+
 // Push each vertex of a flat, world-space geometry up onto the terrain.
 function drapeGeo(geo, groundY, offset) {
   const pos = geo.attributes.position;
@@ -183,6 +268,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
+    applyFacade(mat, makeFacadeTexture());
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
