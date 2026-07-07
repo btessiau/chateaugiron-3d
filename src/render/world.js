@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingHeight, baseHeight } from '../lib/osm.js';
 import { pickSpawn } from '../lib/spawn.js';
 import { orientedBox, gableRoofPositions } from '../lib/roof.js';
+import { scatterInPolygon } from '../lib/scatter.js';
 import {
   roadWidth,
   roadColor,
@@ -144,6 +145,101 @@ function applyFacade(mat, tex) {
   };
 }
 
+// A low-poly broadleaf tree: brown trunk plus a chunky green canopy, coloured by
+// vertex so one InstancedMesh can draw the whole woodland.
+function makeTreeGeometry() {
+  const trunk = new THREE.CylinderGeometry(0.16, 0.24, 1.7, 5).toNonIndexed();
+  trunk.translate(0, 0.85, 0);
+  paint(trunk, new THREE.Color(0x6b4f31));
+  const c1 = new THREE.IcosahedronGeometry(1.6, 0);
+  c1.scale(1, 0.9, 1);
+  c1.translate(0, 2.7, 0);
+  paint(c1, new THREE.Color(0x3f6b32));
+  const c2 = new THREE.IcosahedronGeometry(1.15, 0);
+  c2.translate(0.5, 3.7, 0.2);
+  paint(c2, new THREE.Color(0x4c7d3a));
+  return mergeGeometries([trunk, c1, c2], false);
+}
+
+function paint(geo, color) {
+  setColorAttr(geo, color);
+}
+
+function isWooded(tags) {
+  return (
+    tags.landuse === 'forest' ||
+    tags.landuse === 'orchard' ||
+    tags.natural === 'wood' ||
+    tags.natural === 'scrub'
+  );
+}
+
+function treeSpacing(tags) {
+  if (tags.landuse === 'orchard') return 9;
+  if (tags.natural === 'scrub') return 12;
+  return 8;
+}
+
+// Build one InstancedMesh for a list of tree placements ({ x, z, s }).
+function instanceTrees(placements, groundY) {
+  if (!placements.length) return null;
+  const geo = makeTreeGeometry();
+  if (!geo) return null;
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.95,
+    metalness: 0,
+  });
+  const mesh = new THREE.InstancedMesh(geo, mat, placements.length);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const scl = new THREE.Vector3();
+  const pos = new THREE.Vector3();
+  for (let i = 0; i < placements.length; i++) {
+    const p = placements[i];
+    q.setFromAxisAngle(up, (i * 2.399963) % (Math.PI * 2));
+    scl.set(p.s, p.s * (0.9 + (i % 5) * 0.05), p.s);
+    pos.set(p.x, groundY(p.x, p.z) - 0.2, p.z);
+    m.compose(pos, q, scl);
+    mesh.setMatrixAt(i, m);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  return mesh;
+}
+
+// Scatter instanced trees across every wooded polygon, up to a budget.
+function buildTrees(group, woods, groundY) {
+  const MAX = 16000;
+  const placements = [];
+  let seed = 1;
+  for (const w of woods) {
+    if (placements.length >= MAX) break;
+    const pts = scatterInPolygon(w.ring, w.spacing, seed++);
+    for (const p of pts) {
+      placements.push(p);
+      if (placements.length >= MAX) break;
+    }
+  }
+  const mesh = instanceTrees(placements, groundY);
+  if (mesh) group.add(mesh);
+}
+
+// Instance individual mapped trees from projected [lon, lat] points.
+export function addTreePoints(scene, points, proj, groundY) {
+  const placements = points.map((ll, i) => {
+    const [x, z] = proj.project(ll[0], ll[1]);
+    const r = (Math.sin(i * 45.11) * 43758.5453) % 1;
+    const t = r - Math.floor(r);
+    return { x, z, s: 0.85 + t * 0.7 };
+  });
+  const mesh = instanceTrees(placements, groundY);
+  if (mesh) scene.add(mesh);
+  return mesh;
+}
+
 // Push each vertex of a flat, world-space geometry up onto the terrain.
 function drapeGeo(geo, groundY, offset) {
   const pos = geo.attributes.position;
@@ -174,6 +270,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const roadCol = [];
   const bCentroids = [];
   const colliders = [];
+  const woods = [];
 
   let bi = 0;
   for (const f of data.features) {
@@ -240,6 +337,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       geo.translate(0, wy + 0.1, 0);
       waterGeos.push(geo);
     } else if (f.k === 'green') {
+      if (isWooded(f.t)) woods.push({ ring: pts, spacing: treeSpacing(f.t) });
       if (skipGreen) continue;
       const shape = ringToShape(pts);
       if (!shape) continue;
@@ -327,6 +425,8 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   }
 
   scene.add(group);
+
+  buildTrees(group, woods, groundY);
 
   return {
     bounds,

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { makeProjector, metresToLatLon } from './lib/geo.js';
 import { makeHeightField } from './lib/terrain.js';
 import { buildGrid, collide } from './lib/collision.js';
-import { buildWorld, buildTerrain, buildGround } from './render/world.js';
+import { buildWorld, buildTerrain, buildGround, addTreePoints } from './render/world.js';
 import { Player } from './render/player.js';
 import { Avatar } from './render/avatar.js';
 
@@ -108,6 +108,17 @@ async function init() {
   else buildGround(scene, world.bounds);
 
   const groundAt = (x, z) => (hf ? hf.sample(x, z) : 0);
+
+  // Individual mapped trees (OSM natural=tree), instanced. Optional.
+  try {
+    const tres = await fetch(`${import.meta.env.BASE_URL}data/trees.json`);
+    if (tres.ok) {
+      const td = await tres.json();
+      if (td.trees && td.trees.length) addTreePoints(scene, td.trees, proj, groundAt);
+    }
+  } catch (err) {
+    console.warn('No tree data.', err);
+  }
 
   // Animated CC0 avatar for third person. Optional.
   avatar = new Avatar();
