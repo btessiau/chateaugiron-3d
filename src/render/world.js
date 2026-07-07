@@ -48,8 +48,19 @@ function hashHue(i) {
   return new THREE.Color().setHSL(hue, sat, lig);
 }
 
-export function buildWorld(scene, data, proj) {
+// Push each vertex of a flat, world-space geometry up onto the terrain.
+function drapeGeo(geo, groundY, offset) {
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, groundY(pos.getX(i), pos.getZ(i)) + offset);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+export function buildWorld(scene, data, proj, hf = null) {
   const project = (lonlat) => proj.project(lonlat[0], lonlat[1]);
+  const groundY = (x, z) => (hf ? hf.sample(x, z) : 0);
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
   const track = (x, z) => {
     if (x < bounds.minX) bounds.minX = x;
@@ -74,9 +85,11 @@ export function buildWorld(scene, data, proj) {
       if (f.t['building:part'] && !f.t.building) continue;
       const b = boundsOf(pts);
       if (isOversized(b)) continue;
+      const cx = (b.minX + b.maxX) / 2;
+      const cz = (b.minZ + b.maxZ) / 2;
       bCentroids.push({
-        x: (b.minX + b.maxX) / 2,
-        z: (b.minZ + b.maxZ) / 2,
+        x: cx,
+        z: cz,
         r: 0.5 * Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ),
       });
 
@@ -84,7 +97,8 @@ export function buildWorld(scene, data, proj) {
       if (!shape) continue;
       const base = baseHeight(f.t);
       const top = buildingHeight(f.t);
-      const depth = Math.max(1.5, top - base);
+      const embed = 1.5; // sink the base into the terrain so slopes leave no gap
+      const depth = Math.max(1.5, top - base) + embed;
       let geo;
       try {
         geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1 });
@@ -92,7 +106,7 @@ export function buildWorld(scene, data, proj) {
         continue;
       }
       geo.rotateX(-Math.PI / 2);
-      if (base > 0) geo.translate(0, base, 0);
+      geo.translate(0, groundY(cx, cz) + base - embed, 0);
       setColorAttr(geo, hashHue(bi++));
       buildingGeos.push(geo);
     } else if (f.k === 'water') {
@@ -105,7 +119,9 @@ export function buildWorld(scene, data, proj) {
         continue;
       }
       geo.rotateX(-Math.PI / 2);
-      geo.translate(0, 0.1, 0);
+      const wb = boundsOf(pts);
+      const wy = groundY((wb.minX + wb.maxX) / 2, (wb.minZ + wb.maxZ) / 2);
+      geo.translate(0, wy + 0.1, 0);
       waterGeos.push(geo);
     } else if (f.k === 'green') {
       const shape = ringToShape(pts);
@@ -117,10 +133,10 @@ export function buildWorld(scene, data, proj) {
         continue;
       }
       geo.rotateX(-Math.PI / 2);
-      geo.translate(0, 0.03, 0);
+      drapeGeo(geo, groundY, 0.03);
       greenGeos.push(geo);
     } else if (f.k === 'road') {
-      addRoad(pts, f.t, roadPos, roadCol);
+      addRoad(pts, f.t, roadPos, roadCol, groundY);
     }
   }
 
@@ -188,15 +204,34 @@ export function buildWorld(scene, data, proj) {
   };
 }
 
-function addRoad(pts, tags, outPos, outCol) {
-  const y = 0.06;
-  const ribbon = buildRoadRibbon(pts, roadWidth(tags.highway), y);
+function addRoad(pts, tags, outPos, outCol, groundY) {
+  const ribbon = buildRoadRibbon(pts, roadWidth(tags.highway), 0);
   if (!ribbon.length) return;
   const c = new THREE.Color(roadColor(tags.highway));
   for (let i = 0; i < ribbon.length; i += 3) {
-    outPos.push(ribbon[i], ribbon[i + 1], ribbon[i + 2]);
+    const x = ribbon[i];
+    const z = ribbon[i + 2];
+    outPos.push(x, groundY(x, z) + 0.06, z);
     outCol.push(c.r, c.g, c.b);
   }
+}
+
+// Real terrain relief from the IGN heightfield. Vertices align to the grid, so
+// the mesh reproduces the measured elevations exactly.
+export function buildTerrain(scene, hf) {
+  const geo = new THREE.PlaneGeometry(hf.size, hf.size, hf.n - 1, hf.n - 1);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, hf.sample(pos.getX(i), pos.getZ(i)));
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({ color: 0x6f7551, roughness: 1.0, metalness: 0 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  return mesh;
 }
 
 export function buildGround(scene, bounds) {

@@ -15,6 +15,7 @@ export class Walker {
     this.keys = { forward: false, back: false, left: false, right: false, run: false };
     this._velocity = new THREE.Vector3();
     this._dir = new THREE.Vector3();
+    this.ground = null; // (x, z) => terrain height, or null for flat
 
     this._onKey = this._onKey.bind(this);
     document.addEventListener('keydown', (e) => this._onKey(e, true));
@@ -44,6 +45,10 @@ export class Walker {
 
   setPosition(x, y, z) {
     this.controls.object.position.set(x, y, z);
+  }
+
+  setGround(fn) {
+    this.ground = fn;
   }
 
   _onKey(e, down) {
@@ -87,6 +92,8 @@ export class Walker {
     this.controls.moveForward(this._dir.z * speed * dt);
     this.controls.moveRight(this._dir.x * speed * dt);
 
-    this.controls.object.position.y = this.eyeHeight;
+    const p = this.controls.object.position;
+    const gy = this.ground ? this.ground(p.x, p.z) : 0;
+    p.y = gy + this.eyeHeight;
   }
 }

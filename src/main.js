@@ -4,7 +4,8 @@
 
 import * as THREE from 'three';
 import { makeProjector, metresToLatLon } from './lib/geo.js';
-import { buildWorld, buildGround } from './render/world.js';
+import { makeHeightField } from './lib/terrain.js';
+import { buildWorld, buildTerrain, buildGround } from './render/world.js';
 import { Walker } from './render/controls.js';
 
 const app = document.getElementById('app');
@@ -67,18 +68,32 @@ async function init() {
   }
 
   const proj = makeProjector(data.meta.center);
+
+  // Optional real terrain relief (IGN elevation). Falls back to flat if absent.
+  let hf = null;
+  try {
+    const eres = await fetch(`${import.meta.env.BASE_URL}data/elevation.json`);
+    if (eres.ok) hf = makeHeightField(await eres.json());
+  } catch (err) {
+    console.warn('No elevation data, using flat ground.', err);
+  }
+
   loadingEl.textContent = 'Building the town…';
 
   // Let the browser paint the loading text before the heavy build.
   await new Promise((r) => setTimeout(r, 20));
 
-  const world = buildWorld(scene, data, proj);
-  buildGround(scene, world.bounds);
+  const world = buildWorld(scene, data, proj, hf);
+  if (hf) buildTerrain(scene, hf);
+  else buildGround(scene, world.bounds);
+
+  const groundAt = (x, z) => (hf ? hf.sample(x, z) : 0);
 
   // Spawn in an open spot near the château, looking toward it.
   const sp = world.spawn || { x: 18, z: 62 };
-  walker.setPosition(sp.x, walker.eyeHeight, sp.z);
-  camera.lookAt(0, 6, 0);
+  walker.setGround(groundAt);
+  walker.setPosition(sp.x, groundAt(sp.x, sp.z) + walker.eyeHeight, sp.z);
+  camera.lookAt(0, groundAt(0, 0) + 6, 0);
 
   const c = data.meta.counts || {};
   hudCount.textContent = `${c.building || 0} buildings · ${c.road || 0} roads · ${c.water || 0} water · ${c.green || 0} green`;
@@ -88,8 +103,9 @@ async function init() {
   startBtn.textContent = 'Enter Châteaugiron';
   loadingEl.textContent = '';
 
-  // Store projector for HUD.
+  // Store projector + game internals for the HUD and for headless captures.
   window.__proj = proj;
+  window.__game = { scene, camera, renderer, walker, getHeight: groundAt, hf };
 }
 
 startBtn.addEventListener('click', () => {
