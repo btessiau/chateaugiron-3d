@@ -643,7 +643,7 @@ function drapeGeo(geo, groundY, offset) {
 
 export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const project = (lonlat) => proj.project(lonlat[0], lonlat[1]);
-  const groundY = (x, z) => (hf ? hf.sample(x, z) : 0);
+  const groundY = (x, z) => (hf ? hf.sampleSmooth(x, z) : 0);
   const skipGreen = !!options.skipGreen;
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
   const track = (x, z) => {
@@ -918,14 +918,16 @@ function addRoad(pts, tags, outPos, outCol, groundY) {
 // the mesh reproduces the measured elevations exactly. An optional aerial
 // orthophoto is draped on top, mapped 1:1 to the world.
 export function buildTerrain(scene, hf, texture = null) {
-  const geo = new THREE.PlaneGeometry(hf.size, hf.size, hf.n - 1, hf.n - 1);
+  const SUB = 3; // tessellate finer than the 26 m grid for smooth ground
+  const seg = (hf.n - 1) * SUB;
+  const geo = new THREE.PlaneGeometry(hf.size, hf.size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const uv = geo.attributes.uv;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    pos.setY(i, hf.sample(x, z));
+    pos.setY(i, hf.sampleSmooth(x, z));
     uv.setXY(i, (x + hf.half) / hf.size, (z + hf.half) / hf.size);
   }
   pos.needsUpdate = true;
@@ -934,10 +936,43 @@ export function buildTerrain(scene, hf, texture = null) {
   const mat = texture
     ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.97, metalness: 0 })
     : new THREE.MeshStandardMaterial({ color: 0x6f7551, roughness: 1.0, metalness: 0 });
+  if (texture) addGroundDetail(mat);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   scene.add(mesh);
   return mesh;
+}
+
+// Blend a tiling, world-space procedural grain into the aerial ground so it
+// keeps some tooth up close instead of dissolving into a blurry photo. Pure
+// shader tweak, verified by headless screenshots.
+function addGroundDetail(mat) {
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = position.xz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+varying vec2 vGroundXZ;
+float gHash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float gNoise(vec2 p){
+  vec2 i=floor(p), f=fract(p);
+  vec2 u=f*f*(3.0-2.0*f);
+  return mix(mix(gHash(i),gHash(i+vec2(1.,0.)),u.x),
+             mix(gHash(i+vec2(0.,1.)),gHash(i+vec2(1.,1.)),u.x), u.y);
+}`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+{
+  float n = gNoise(vGroundXZ*0.7)*0.55 + gNoise(vGroundXZ*2.7)*0.3 + gNoise(vGroundXZ*8.0)*0.15;
+  diffuseColor.rgb *= (0.82 + 0.36*n);
+}`,
+      );
+  };
 }
 
 export function buildGround(scene, bounds) {

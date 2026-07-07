@@ -69,7 +69,7 @@ const skyEnv = pmrem.fromScene(sky, 0, 0.1, 100000).texture;
 pmrem.dispose();
 
 // ---- Lights ----
-const hemi = new THREE.HemisphereLight(0xbcd3ff, 0x55503f, 0.7);
+const hemi = new THREE.HemisphereLight(0xbcd3ff, 0x6a6350, 0.95);
 scene.add(hemi);
 
 const sun = new THREE.DirectionalLight(0xfff1dd, 2.6);
@@ -176,7 +176,7 @@ async function init() {
     scene.add(water);
   }
 
-  const groundAt = (x, z) => (hf ? hf.sample(x, z) : 0);
+  const groundAt = (x, z) => (hf ? hf.sampleSmooth(x, z) : 0);
 
   // Individual mapped trees (OSM natural=tree), instanced. Optional.
   try {
