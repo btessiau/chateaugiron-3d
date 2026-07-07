@@ -6,6 +6,7 @@ import {
   boundsOf,
   isOversized,
   buildRoadRibbon,
+  polygonArea,
   DEFAULT_ROAD_WIDTH,
   DEFAULT_ROAD_COLOR,
 } from './geometry.js';
@@ -140,5 +141,27 @@ describe('buildRoadRibbon', () => {
       0,
     );
     expect(out).toEqual([]);
+  });
+});
+
+describe('polygonArea', () => {
+  it('computes the area of a unit square', () => {
+    expect(
+      polygonArea([
+        [0, 0],
+        [2, 0],
+        [2, 2],
+        [0, 2],
+      ]),
+    ).toBe(4);
+  });
+  it('is sign independent of winding order', () => {
+    const ring = [
+      [0, 0],
+      [0, 3],
+      [3, 3],
+      [3, 0],
+    ];
+    expect(polygonArea(ring)).toBe(9);
   });
 });

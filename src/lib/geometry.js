@@ -71,6 +71,18 @@ export function isOversized(bounds, limit = 350) {
   return bounds.maxX - bounds.minX > limit || bounds.maxZ - bounds.minZ > limit;
 }
 
+// Shoelace area of a closed ring in square metres. Points are [x, z].
+export function polygonArea(points) {
+  let a = 0;
+  const n = points.length;
+  for (let i = 0; i < n; i++) {
+    const [x1, z1] = points[i];
+    const [x2, z2] = points[(i + 1) % n];
+    a += x1 * z2 - x2 * z1;
+  }
+  return Math.abs(a) / 2;
+}
+
 // Turn a polyline into a flat triangle ribbon of a given width, at height y.
 // Returns a flat array of x, y, z triples ready for a BufferGeometry.
 export function buildRoadRibbon(points, width, y) {

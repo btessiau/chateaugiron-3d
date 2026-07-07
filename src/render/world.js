@@ -16,6 +16,7 @@ import {
   boundsOf,
   isOversized,
   normalizeRing,
+  polygonArea,
 } from '../lib/geometry.js';
 
 function ringToShape(pts) {
@@ -454,7 +455,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       const shape = ringToShape(pts);
       if (!shape) continue;
       const base = baseHeight(f.t);
-      const top = buildingHeight(f.t);
+      const top = buildingHeight(f.t, polygonArea(pts), bi);
       const embed = 1.5; // sink the base into the terrain so slopes leave no gap
       const depth = Math.max(1.5, top - base) + embed;
       let geo;

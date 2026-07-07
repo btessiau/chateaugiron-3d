@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { parseMeters, buildingHeight, baseHeight, classify, trimTags } from './osm.js';
+import {
+  parseMeters,
+  buildingHeight,
+  baseHeight,
+  classify,
+  trimTags,
+  hash01,
+  storeysForFootprint,
+} from './osm.js';
 
 describe('parseMeters', () => {
   it('returns null for nullish input', () => {
@@ -33,6 +41,41 @@ describe('buildingHeight', () => {
   });
   it('enforces a minimum height', () => {
     expect(buildingHeight({ height: '1' })).toBe(2.5);
+  });
+  it('estimates a height from footprint area when untagged', () => {
+    const h = buildingHeight({}, 100, 3);
+    expect(h).toBeGreaterThan(2.5);
+    expect(h).toBeLessThan(15);
+    // deterministic for a given seed
+    expect(buildingHeight({}, 100, 3)).toBe(h);
+  });
+});
+
+describe('hash01', () => {
+  it('returns a stable value in [0, 1)', () => {
+    const v = hash01(7);
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThan(1);
+    expect(hash01(7)).toBe(v);
+  });
+});
+
+describe('storeysForFootprint', () => {
+  it('gives one storey to tiny footprints', () => {
+    expect(storeysForFootprint(20, 0.1)).toBe(1);
+  });
+  it('spreads small houses between one and two storeys', () => {
+    expect(storeysForFootprint(100, 0.5)).toBe(2);
+    expect(storeysForFootprint(100, 0.9)).toBe(1);
+  });
+  it('spreads medium footprints between two and three storeys', () => {
+    expect(storeysForFootprint(200, 0.4)).toBe(2);
+    expect(storeysForFootprint(200, 0.9)).toBe(3);
+  });
+  it('spreads large blocks across three, two, and four storeys', () => {
+    expect(storeysForFootprint(500, 0.3)).toBe(3);
+    expect(storeysForFootprint(500, 0.7)).toBe(2);
+    expect(storeysForFootprint(500, 0.9)).toBe(4);
   });
 });
 
