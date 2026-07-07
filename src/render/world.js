@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingHeight, baseHeight } from '../lib/osm.js';
 import { pickSpawn } from '../lib/spawn.js';
+import { orientedBox, gableRoofPositions } from '../lib/roof.js';
 import {
   roadWidth,
   roadColor,
@@ -48,6 +49,16 @@ function hashHue(i) {
   return new THREE.Color().setHSL(hue, sat, lig);
 }
 
+function slateColor(i) {
+  // Breton roofs are mostly grey-blue slate, with a little tone variation.
+  const r = (Math.sin(i * 78.233) * 43758.5453) % 1;
+  const t = r - Math.floor(r);
+  const hue = 0.58 + t * 0.04;
+  const sat = 0.04 + ((i * 3) % 4) * 0.02;
+  const lig = 0.28 + ((i * 5) % 6) * 0.022;
+  return new THREE.Color().setHSL(hue, sat, lig);
+}
+
 // Push each vertex of a flat, world-space geometry up onto the terrain.
 function drapeGeo(geo, groundY, offset) {
   const pos = geo.attributes.position;
@@ -71,6 +82,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   };
 
   const buildingGeos = [];
+  const roofGeos = [];
   const waterGeos = [];
   const greenGeos = [];
   const roadPos = [];
@@ -108,8 +120,24 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       }
       geo.rotateX(-Math.PI / 2);
       geo.translate(0, groundY(cx, cz) + base - embed, 0);
-      setColorAttr(geo, hashHue(bi++));
+      setColorAttr(geo, hashHue(bi));
       buildingGeos.push(geo);
+
+      // Pitched slate roof on top of the wall. Skip tiny footprints and very
+      // large ones (big commercial or civic blocks read better flat).
+      const box = orientedBox(pts);
+      const area4 = 4 * box.L * box.W;
+      if (box.L >= 1.5 && box.W >= 1.0 && box.W <= 22 && area4 <= 2200) {
+        const roofH = Math.min(Math.max(box.W * 0.8, 1.0), 4.5);
+        const wallTop = groundY(cx, cz) + base + Math.max(1.5, top - base);
+        const rp = gableRoofPositions(box, wallTop, roofH);
+        const rgeo = new THREE.BufferGeometry();
+        rgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(rp), 3));
+        rgeo.computeVertexNormals();
+        setColorAttr(rgeo, slateColor(bi));
+        roofGeos.push(rgeo);
+      }
+      bi++;
     } else if (f.k === 'water') {
       const shape = ringToShape(pts);
       if (!shape) continue;
@@ -151,6 +179,20 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       vertexColors: true,
       roughness: 0.92,
       metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+
+  if (roofGeos.length) {
+    const merged = mergeGeometries(roofGeos, false);
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.72,
+      metalness: 0.02,
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(merged, mat);
