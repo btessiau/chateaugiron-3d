@@ -980,11 +980,16 @@ function addRoad(pts, tags, outPos, outCol, groundY) {
 
 // Real terrain relief from the IGN heightfield. Vertices align to the grid, so
 // the mesh reproduces the measured elevations exactly. An optional aerial
-// orthophoto is draped on top, mapped 1:1 to the world.
-export function buildTerrain(scene, hf, texture = null) {
-  const SUB = 3; // tessellate finer than the 26 m grid for smooth ground
-  const seg = (hf.n - 1) * SUB;
-  const geo = new THREE.PlaneGeometry(hf.size, hf.size, seg, seg);
+// orthophoto is draped on top, mapped 1:1 to the world. Pass opts.size to drape
+// a smaller, higher resolution photo over just the town core: it sits on top of
+// the base ground with a polygon offset and fades out at its edge so there is no
+// visible seam where the sharp photo meets the wider, softer one.
+export function buildTerrain(scene, hf, texture = null, opts = {}) {
+  const overlay = !!opts.size;
+  const size = overlay ? opts.size : hf.size;
+  const half = size / 2;
+  const seg = overlay ? Math.max(2, Math.round(size / 10)) : (hf.n - 1) * 3;
+  const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const uv = geo.attributes.uv;
@@ -992,7 +997,7 @@ export function buildTerrain(scene, hf, texture = null) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
     pos.setY(i, hf.sampleSmooth(x, z));
-    uv.setXY(i, (x + hf.half) / hf.size, (z + hf.half) / hf.size);
+    uv.setXY(i, (x + half) / size, (z + half) / size);
   }
   pos.needsUpdate = true;
   uv.needsUpdate = true;
@@ -1000,21 +1005,42 @@ export function buildTerrain(scene, hf, texture = null) {
   const mat = texture
     ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.97, metalness: 0 })
     : new THREE.MeshStandardMaterial({ color: 0x6f7551, roughness: 1.0, metalness: 0 });
-  if (texture) addGroundDetail(mat);
+  if (texture) addGroundDetail(mat, overlay ? half : null);
+  if (overlay) {
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -2;
+    mat.polygonOffsetUnits = -2;
+    mat.transparent = true;
+  }
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
+  if (overlay) mesh.renderOrder = 1;
   scene.add(mesh);
   return mesh;
 }
 
 // Blend a tiling, world-space procedural grain into the aerial ground so it
-// keeps some tooth up close instead of dissolving into a blurry photo. Pure
+// keeps some tooth up close instead of dissolving into a blurry photo. When a
+// feather half size is given, also fade the photo out towards its square edge so
+// a sharp core overlay melts into the wider ground below with no hard seam. Pure
 // shader tweak, verified by headless screenshots.
-function addGroundDetail(mat) {
+function addGroundDetail(mat, featherHalf = null) {
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = position.xz;');
+    let grain = `#include <map_fragment>
+{
+  float n = gNoise(vGroundXZ*0.7)*0.55 + gNoise(vGroundXZ*2.7)*0.3 + gNoise(vGroundXZ*8.0)*0.15;
+  diffuseColor.rgb *= (0.82 + 0.36*n);
+}`;
+    if (featherHalf) {
+      grain += `
+{
+  float fd = max(abs(vGroundXZ.x), abs(vGroundXZ.y)) / ${featherHalf.toFixed(1)};
+  diffuseColor.a *= 1.0 - smoothstep(0.80, 0.98, fd);
+}`;
+    }
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
@@ -1028,14 +1054,7 @@ float gNoise(vec2 p){
              mix(gHash(i+vec2(0.,1.)),gHash(i+vec2(1.,1.)),u.x), u.y);
 }`,
       )
-      .replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
-{
-  float n = gNoise(vGroundXZ*0.7)*0.55 + gNoise(vGroundXZ*2.7)*0.3 + gNoise(vGroundXZ*8.0)*0.15;
-  diffuseColor.rgb *= (0.82 + 0.36*n);
-}`,
-      );
+      .replace('#include <map_fragment>', grain);
   };
 }
 

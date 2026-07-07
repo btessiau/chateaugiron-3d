@@ -3,7 +3,7 @@
 // as the ground texture. The image covers exactly the terrain grid extent, so
 // it maps 1:1 onto the world.
 //
-// Usage: node scripts/fetch-ortho.mjs [sizeMeters] [pixels]
+// Usage: node scripts/fetch-ortho.mjs [sizeMeters] [pixels] [outName]
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -15,6 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CENTER = { lat: 48.0489, lon: -1.5019 };
 const SIZE = Number(process.argv[2] || 3400); // must match the terrain grid
 const PX = Number(process.argv[3] || 4000); // <= 5010 (WMS limit)
+const OUT = process.argv[4] || 'ortho.jpg';
 
 const proj = makeProjector(CENTER);
 const half = SIZE / 2;
@@ -38,7 +39,7 @@ async function run() {
     throw new Error(`Expected an image, got ${type}: ${(await res.text()).slice(0, 300)}`);
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  const outPath = resolve(__dirname, '../public/textures/ortho.jpg');
+  const outPath = resolve(__dirname, `../public/textures/${OUT}`);
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, buf);
   console.log(`\nWrote ${outPath} (${(buf.length / 1024 / 1024).toFixed(2)} MB)`);

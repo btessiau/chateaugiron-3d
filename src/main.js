@@ -130,26 +130,31 @@ async function init() {
   // Let the browser paint the loading text before the heavy build.
   await new Promise((r) => setTimeout(r, 20));
 
-  // Real aerial orthophoto for the ground (IGN). Optional.
-  let ortho = null;
-  try {
-    ortho = await new Promise((resolve, reject) => {
+  // Real aerial orthophoto for the ground (IGN). Optional. A wide, softer photo
+  // covers the whole terrain, and a sharper photo of the town core is draped on
+  // top so the ground the player actually walks on holds detail up close.
+  const loadTex = (name) =>
+    new Promise((resolve) => {
       new THREE.TextureLoader().load(
-        `${import.meta.env.BASE_URL}textures/ortho.jpg`,
-        resolve,
+        `${import.meta.env.BASE_URL}textures/${name}`,
+        (t) => {
+          t.colorSpace = THREE.SRGBColorSpace;
+          t.anisotropy = 16;
+          resolve(t);
+        },
         undefined,
-        reject,
+        () => resolve(null),
       );
     });
-    ortho.colorSpace = THREE.SRGBColorSpace;
-    ortho.anisotropy = 8;
-  } catch (err) {
-    console.warn('No ortho texture, using plain ground.', err);
-  }
+  const ortho = await loadTex('ortho.jpg');
+  const orthoCore = await loadTex('ortho-core.jpg');
+  if (!ortho) console.warn('No ortho texture, using plain ground.');
 
   const world = buildWorld(scene, data, proj, hf, { skipGreen: !!ortho });
-  if (hf) buildTerrain(scene, hf, ortho);
-  else buildGround(scene, world.bounds);
+  if (hf) {
+    buildTerrain(scene, hf, ortho);
+    if (orthoCore) buildTerrain(scene, hf, orthoCore, { size: 1500 });
+  } else buildGround(scene, world.bounds);
 
   // North-up minimap built once from the projected town features.
   try {
