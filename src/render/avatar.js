@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { resolveClip } from '../lib/clip.js';
 
 const CLIP_ALIASES = {
   Idle: ['Idle'],
@@ -52,11 +53,7 @@ export class Avatar {
   }
 
   _resolve(name) {
-    const names = CLIP_ALIASES[name] || [name];
-    for (const n of names) {
-      if (this.actions[n]) return n;
-    }
-    return null;
+    return resolveClip(Object.keys(this.actions), CLIP_ALIASES[name] || [name]);
   }
 
   setState(name) {
