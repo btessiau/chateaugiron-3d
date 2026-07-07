@@ -58,9 +58,10 @@ function drapeGeo(geo, groundY, offset) {
   geo.computeVertexNormals();
 }
 
-export function buildWorld(scene, data, proj, hf = null) {
+export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const project = (lonlat) => proj.project(lonlat[0], lonlat[1]);
   const groundY = (x, z) => (hf ? hf.sample(x, z) : 0);
+  const skipGreen = !!options.skipGreen;
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
   const track = (x, z) => {
     if (x < bounds.minX) bounds.minX = x;
@@ -124,6 +125,7 @@ export function buildWorld(scene, data, proj, hf = null) {
       geo.translate(0, wy + 0.1, 0);
       waterGeos.push(geo);
     } else if (f.k === 'green') {
+      if (skipGreen) continue;
       const shape = ringToShape(pts);
       if (!shape) continue;
       let geo;
@@ -217,17 +219,25 @@ function addRoad(pts, tags, outPos, outCol, groundY) {
 }
 
 // Real terrain relief from the IGN heightfield. Vertices align to the grid, so
-// the mesh reproduces the measured elevations exactly.
-export function buildTerrain(scene, hf) {
+// the mesh reproduces the measured elevations exactly. An optional aerial
+// orthophoto is draped on top, mapped 1:1 to the world.
+export function buildTerrain(scene, hf, texture = null) {
   const geo = new THREE.PlaneGeometry(hf.size, hf.size, hf.n - 1, hf.n - 1);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
+  const uv = geo.attributes.uv;
   for (let i = 0; i < pos.count; i++) {
-    pos.setY(i, hf.sample(pos.getX(i), pos.getZ(i)));
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    pos.setY(i, hf.sample(x, z));
+    uv.setXY(i, (x + hf.half) / hf.size, (z + hf.half) / hf.size);
   }
   pos.needsUpdate = true;
+  uv.needsUpdate = true;
   geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x6f7551, roughness: 1.0, metalness: 0 });
+  const mat = texture
+    ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.97, metalness: 0 })
+    : new THREE.MeshStandardMaterial({ color: 0x6f7551, roughness: 1.0, metalness: 0 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   scene.add(mesh);

@@ -83,8 +83,25 @@ async function init() {
   // Let the browser paint the loading text before the heavy build.
   await new Promise((r) => setTimeout(r, 20));
 
-  const world = buildWorld(scene, data, proj, hf);
-  if (hf) buildTerrain(scene, hf);
+  // Real aerial orthophoto for the ground (IGN). Optional.
+  let ortho = null;
+  try {
+    ortho = await new Promise((resolve, reject) => {
+      new THREE.TextureLoader().load(
+        `${import.meta.env.BASE_URL}textures/ortho.jpg`,
+        resolve,
+        undefined,
+        reject,
+      );
+    });
+    ortho.colorSpace = THREE.SRGBColorSpace;
+    ortho.anisotropy = 8;
+  } catch (err) {
+    console.warn('No ortho texture, using plain ground.', err);
+  }
+
+  const world = buildWorld(scene, data, proj, hf, { skipGreen: !!ortho });
+  if (hf) buildTerrain(scene, hf, ortho);
   else buildGround(scene, world.bounds);
 
   const groundAt = (x, z) => (hf ? hf.sample(x, z) : 0);
