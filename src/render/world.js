@@ -179,9 +179,8 @@ function makeFacadeTexture() {
 
 // Multiply a tiling facade texture onto the vertical walls of the merged
 // building mesh, in world space, leaving roofs and flat tops untouched.
-function applyFacade(mat, tex) {
+function applyFacade(mat, tex, scale = 1 / 3.0) {
   if (!tex) return;
-  const scale = 1 / 3.0; // one window tile per ~3 m
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uFacade = { value: tex };
     shader.uniforms.uFacadeScale = { value: scale };
@@ -258,7 +257,16 @@ function buildChurchInto(o) {
   const gy = groundY(cx, cz);
 
   if (box.L >= 4 && box.W >= 3) {
-    buildChurchInterior({ box, gy, wallH, chapel, interiorGeos, decorMeshes, colliders });
+    buildChurchInterior({
+      box,
+      gy,
+      wallH,
+      chapel,
+      interiorGeos,
+      churchWallGeos: o.churchWallGeos,
+      decorMeshes,
+      colliders,
+    });
     if (o.landmarks && !chapel) {
       const area = box.L * box.W;
       if (!o.landmarks.church || area > o.landmarks.church.area) {
@@ -292,7 +300,7 @@ function buildChurchInto(o) {
     const rgeo = new THREE.BufferGeometry();
     rgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(rp), 3));
     rgeo.computeVertexNormals();
-    setColorAttr(rgeo, new THREE.Color(0x333b47));
+    setColorAttr(rgeo, new THREE.Color().setHSL(0.59, 0.06, 0.82));
     roofGeos.push(rgeo);
   }
 
@@ -321,12 +329,12 @@ function buildChurchInto(o) {
 
 // Build the hollow, furnished, enterable inside of a church nave.
 function buildChurchInterior(o) {
-  const { box, gy, wallH, chapel, interiorGeos, decorMeshes, colliders } = o;
+  const { box, gy, wallH, chapel, interiorGeos, churchWallGeos, decorMeshes, colliders } = o;
   const { cx, cz, ux, uz, vx, vz, L, W } = box;
   const th = 0.5;
   const angU = Math.atan2(-uz, ux);
   const angV = Math.atan2(-vz, vx);
-  const stone = new THREE.Color(0xa79f90);
+  const stone = new THREE.Color(0xc4bcac);
   const toWorld = (s, t) => [cx + ux * s + vx * t, cz + uz * s + vz * t];
 
   const floor = new THREE.BoxGeometry(2 * L, 0.3, 2 * W);
@@ -338,7 +346,7 @@ function buildChurchInterior(o) {
   const addWall = (a, b, h, y0, collide) => {
     const g = wallBoxGeo(a, b, h, y0, th);
     setColorAttr(g, stone);
-    interiorGeos.push(g);
+    churchWallGeos.push(g);
     if (collide) pushWallColliders(a, b, colliders, 0.55);
   };
 
@@ -1142,6 +1150,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const towerGeos = [];
   const spireGeos = [];
   const interiorGeos = [];
+  const churchWallGeos = [];
   const decorMeshes = [];
   const waterGeos = [];
   const greenGeos = [];
@@ -1197,6 +1206,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
           towerGeos,
           spireGeos,
           interiorGeos,
+          churchWallGeos,
           decorMeshes,
           colliders,
           landmarks,
@@ -1364,7 +1374,24 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     group.add(mesh);
   }
 
-  for (const m of decorMeshes) group.add(m);
+  // Church nave walls: their own mesh so real CC0 stone can be tiled over them
+  // with the vertical-triplanar facade shader (world-space, so the long walls
+  // do not stretch). Inside and outside both read as stacked granite.
+  if (churchWallGeos.length) {
+    const merged = mergeGeometries(churchWallGeos, false);
+    merged.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.95,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+    applyFacade(mat, tiledTexture('castle-wall.jpg'), 1 / 2.4);
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
 
   if (spireGeos.length) {
     let total = 0;
