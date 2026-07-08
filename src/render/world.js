@@ -163,6 +163,37 @@ function tiledTexture(name) {
   return tex;
 }
 
+const CHUNK_M = 150; // town chunk size in metres, for frustum and distance culling
+
+// Split world placed geometries into a grid of square chunks and merge each cell
+// into its own mesh, all sharing one material. Each mesh keeps its centre so the
+// render loop can hide chunks past the haze, and three.js frustum culls the rest.
+// This replaces one giant town mesh, which could never be culled, with many that
+// can. Optional prep runs on each merged chunk (normals, planar UVs).
+function chunkMeshes(geos, cell, material, prep) {
+  const cells = new Map();
+  for (const g of geos) {
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    const c = g.boundingSphere.center;
+    const key = `${Math.round(c.x / cell)}:${Math.round(c.z / cell)}`;
+    let arr = cells.get(key);
+    if (!arr) cells.set(key, (arr = []));
+    arr.push(g);
+  }
+  const meshes = [];
+  for (const arr of cells.values()) {
+    const merged = mergeGeometries(arr, false);
+    if (prep) prep(merged);
+    merged.computeBoundingSphere();
+    const mesh = new THREE.Mesh(merged, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData.cull = merged.boundingSphere.center;
+    meshes.push(mesh);
+  }
+  return meshes;
+}
+
 // Lay a rectangular ground patch of triangles that follows the terrain. Center
 // (cx,cz) with unit axes (ux,uz) and (vx,vz); half is the half-extent on each
 // axis; the grid samples the true ground height at every vertex so the patch
@@ -1507,37 +1538,39 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   pushGroundPatch(cobblePos, spawn.x, spawn.z, 1, 0, 0, 1, 9, 9, groundY, 0.07);
 
   const group = new THREE.Group();
+  const cullables = [];
 
+  // Walls: one shared material across every chunk. The facade shader is world
+  // space, so chunks tile seamlessly. Split into a grid so far and off-screen
+  // chunks stop drawing, instead of one town-sized mesh that never culled.
   if (buildingGeos.length) {
-    const merged = mergeGeometries(buildingGeos, false);
-    merged.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
+    const wallMat = new THREE.MeshStandardMaterial({
       vertexColors: true,
       roughness: 0.92,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
-    applyFacade(mat, makeFacadeTexture());
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
+    applyFacade(wallMat, makeFacadeTexture());
+    for (const mesh of chunkMeshes(buildingGeos, CHUNK_M, wallMat, (g) =>
+      g.computeVertexNormals(),
+    )) {
+      group.add(mesh);
+      cullables.push(mesh);
+    }
   }
 
   if (roofGeos.length) {
-    const merged = mergeGeometries(roofGeos, false);
-    planarUV(merged, 3.0);
-    const mat = new THREE.MeshStandardMaterial({
+    const roofMat = new THREE.MeshStandardMaterial({
       map: tiledTexture('roof-slate.jpg'),
       vertexColors: true,
       roughness: 0.82,
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
+    for (const mesh of chunkMeshes(roofGeos, CHUNK_M, roofMat, (g) => planarUV(g, 3.0))) {
+      group.add(mesh);
+      cullables.push(mesh);
+    }
   }
 
   if (towerGeos.length) {
@@ -1672,6 +1705,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     colliders,
     waterGeo,
     landmarks,
+    cullables,
     disposed: () => {},
   };
 }

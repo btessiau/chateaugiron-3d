@@ -61,7 +61,10 @@ if (soundEl) soundEl.addEventListener('click', toggleSound);
 
 // ---- Renderer ----
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// The image effects run several full-screen passes, whose cost scales with the
+// pixel count. On a retina screen a ratio of 2 quadruples that, so it is capped
+// at 1.5, which stays sharp while cutting the fragment work for every pass.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -201,6 +204,10 @@ let npcs = null;
 let birds = null;
 let water = null;
 let waterNormals = null;
+// Town chunks to distance cull each frame, and the radius past which they hide.
+// Set just beyond the fog so a chunk is fully hazed before it pops out of view.
+let cullables = null;
+const CULL_DIST2 = 640 * 640;
 
 // A few birds circling over the old town, for a little life in the sky.
 birds = buildBirds();
@@ -259,6 +266,7 @@ async function init() {
   if (!ortho) console.warn('No ortho texture, using plain ground.');
 
   const world = buildWorld(scene, data, proj, hf, { skipGreen: !!ortho });
+  cullables = world.cullables;
   if (hf) {
     buildTerrain(scene, hf, ortho);
     if (orthoCore) buildTerrain(scene, hf, orthoCore, { size: 1500 });
@@ -539,6 +547,16 @@ function tick() {
   if (player) player.update(dt);
   if (npcs) npcs.update(dt);
   if (birds) birds.update(dt);
+  if (cullables) {
+    const cx = camera.position.x;
+    const cz = camera.position.z;
+    for (let i = 0; i < cullables.length; i++) {
+      const c = cullables[i].userData.cull;
+      const dx = c.x - cx;
+      const dz = c.z - cz;
+      cullables[i].visible = dx * dx + dz * dz < CULL_DIST2;
+    }
+  }
   if (waterNormals) {
     waterNormals.offset.x += dt * 0.012;
     waterNormals.offset.y += dt * 0.009;
