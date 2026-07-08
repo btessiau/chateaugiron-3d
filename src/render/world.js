@@ -125,6 +125,15 @@ const FACADE_PALETTE = [
   0xcabfae, 0xb9a98f,
 ].map((hex) => new THREE.Color(hex));
 
+// Flat cartoon roof tones for the toy town: mostly Breton slate blue-greys, a
+// few cool greys and the odd terracotta, so neighbouring roofs read as distinct
+// coloured planes instead of one photo. Common tones are repeated so they turn
+// up more often than the terracotta accents.
+const ROOF_PALETTE = [
+  0x6e8199, 0x6e8199, 0x74869c, 0x74869c, 0x7f8ea1, 0x66788f, 0x8a9099, 0x9aa0a6, 0x5c6675,
+  0xb0714e, 0xbd7d55,
+].map((hex) => new THREE.Color(hex));
+
 function fract01(x) {
   return x - Math.floor(x);
 }
@@ -143,15 +152,16 @@ function hashHue(i) {
 }
 
 function slateColor(i) {
-  // Per-roof tint that multiplies the real slate photo (the roof material map).
-  // Kept near white so the photo colour dominates, with a faint Breton blue-grey
-  // shift and a little lightness variation from house to house. If the texture is
-  // ever missing the roofs fall back to a pale slate blue, not black.
-  const t = fract01(Math.sin(i * 78.233) * 43758.5453);
-  const hue = 0.58 + t * 0.03;
-  const sat = 0.05 + ((i * 3) % 3) * 0.015;
-  const lig = 0.82 + ((i * 5) % 6) * 0.02;
-  return new THREE.Color().setHSL(hue, sat, lig);
+  // Flat per-roof colour for the toy town, straight from the roof palette (no
+  // photo). A little deterministic lightness jitter so neighbours sharing a tone
+  // are not identical.
+  const r = fract01(Math.sin(i * 78.233) * 43758.5453);
+  const base = ROOF_PALETTE[Math.floor(r * ROOF_PALETTE.length)].clone();
+  const hsl = { h: 0, s: 0, l: 0 };
+  base.getHSL(hsl);
+  const jl = (fract01(Math.sin(i * 12.11) * 9137.7) - 0.5) * 0.06;
+  base.setHSL(hsl.h, hsl.s, Math.min(1, Math.max(0, hsl.l + jl)));
+  return base;
 }
 
 // Give a merged geometry simple planar UVs from world X/Z, so a repeating
@@ -1902,10 +1912,9 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
 
   if (roofGeos.length) {
     const roofMat = new THREE.MeshStandardMaterial({
-      map: tiledTexture('roof-slate.jpg'),
       vertexColors: true,
-      roughness: 0.82,
-      metalness: 0.02,
+      roughness: 0.9,
+      metalness: 0.0,
       side: THREE.DoubleSide,
     });
     for (const mesh of chunkMeshes(roofGeos, CHUNK_M, roofMat, (g) => planarUV(g, 3.0))) {
