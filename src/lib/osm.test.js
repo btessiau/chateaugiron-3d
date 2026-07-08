@@ -110,6 +110,17 @@ describe('classify', () => {
     expect(classify({ landuse: 'grass' })).toBe('green');
     expect(classify({ leisure: 'park' })).toBe('green');
   });
+  it('classifies barriers and tree rows as land borders', () => {
+    expect(classify({ barrier: 'wall' })).toBe('barrier');
+    expect(classify({ barrier: 'hedge' })).toBe('barrier');
+    expect(classify({ barrier: 'fence' })).toBe('barrier');
+    expect(classify({ barrier: 'city_wall' })).toBe('barrier');
+    expect(classify({ natural: 'tree_row' })).toBe('barrier');
+  });
+  it('prefers water and building over a barrier tag', () => {
+    expect(classify({ natural: 'water', barrier: 'wall' })).toBe('water');
+    expect(classify({ building: 'yes', barrier: 'wall' })).toBe('building');
+  });
   it('returns null for everything else', () => {
     expect(classify({})).toBeNull();
     expect(classify({ amenity: 'school' })).toBeNull();
@@ -120,5 +131,8 @@ describe('trimTags', () => {
   it('keeps known non-null keys and drops the rest', () => {
     const out = trimTags({ building: 'yes', foo: 'bar', height: null, name: 'Mairie' });
     expect(out).toEqual({ building: 'yes', name: 'Mairie' });
+  });
+  it('keeps the barrier tag', () => {
+    expect(trimTags({ barrier: 'hedge', foo: 'bar' })).toEqual({ barrier: 'hedge' });
   });
 });

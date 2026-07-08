@@ -42,6 +42,10 @@ const query = `
   way["natural"="wood"];
   way["natural"="scrub"];
   way["natural"="grassland"];
+  way["natural"="tree_row"];
+  way["barrier"];
+  relation["natural"="water"];
+  relation["water"];
 );
 out geom;
 `;
@@ -80,12 +84,30 @@ async function run() {
   }
   if (!json) throw lastErr || new Error('All Overpass endpoints failed');
 
-  const counts = { building: 0, road: 0, water: 0, green: 0 };
+  const counts = { building: 0, road: 0, water: 0, green: 0, barrier: 0 };
   const features = [];
 
   for (const el of json.elements || []) {
-    if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
     const tags = el.tags || {};
+
+    // Water bodies mapped as multipolygon relations (a lake or pond, often with
+    // an island): each outer-role member ring becomes its own water polygon.
+    // Inner rings (islands) are skipped, so the fill stays a simple ring.
+    if (el.type === 'relation') {
+      const isWater = tags.natural === 'water' || tags.water || tags.waterway === 'riverbank';
+      if (!isWater || !Array.isArray(el.members)) continue;
+      const t = trimTags(tags);
+      for (const m of el.members) {
+        if (m.type !== 'way' || m.role !== 'outer' || !m.geometry || m.geometry.length < 3)
+          continue;
+        const g = m.geometry.map((p) => [p.lon, p.lat]);
+        features.push({ k: 'water', t, g });
+        counts.water++;
+      }
+      continue;
+    }
+
+    if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
     const kind = classify(tags);
     if (!kind) continue;
     // geometry as [lon, lat] pairs
@@ -113,7 +135,7 @@ async function run() {
   const kb = (JSON.stringify(payload).length / 1024).toFixed(0);
   console.log(`\nWrote ${outPath} (${kb} KB)`);
   console.log(
-    `Features: ${features.length}  |  buildings ${counts.building}, roads ${counts.road}, water ${counts.water}, green ${counts.green}`,
+    `Features: ${features.length}  |  buildings ${counts.building}, roads ${counts.road}, water ${counts.water}, green ${counts.green}, barriers ${counts.barrier}`,
   );
 }
 

@@ -369,14 +369,20 @@ export function mapTargets(features, project) {
     out.push({ kind: 'chateau', label: 'Château', x: c.x, n: c.n });
   }
 
-  const namedGreen = [
-    [/etang|étang/i, 'etang', 'Étang'],
-    [/jardin/i, 'jardin', 'Jardin'],
+  // The étang is really a pond, so prefer a water feature of that name over the
+  // like-named park around it; the jardin is a named green.
+  const namedTargets = [
+    [/etang|étang/i, 'etang', 'Étang', ['water', 'green']],
+    [/jardin/i, 'jardin', 'Jardin', ['green']],
   ];
-  for (const [re, kind, label] of namedGreen) {
-    const g = features.find((f) => f.k === 'green' && f.t && f.t.name && re.test(f.t.name));
-    if (g) {
-      const c = centroid(g);
+  for (const [re, kind, label, kinds] of namedTargets) {
+    let feat = null;
+    for (const k of kinds) {
+      feat = features.find((f) => f.k === k && f.t && f.t.name && re.test(f.t.name));
+      if (feat) break;
+    }
+    if (feat) {
+      const c = centroid(feat);
       out.push({ kind, label, x: c.x, n: c.n });
     }
   }

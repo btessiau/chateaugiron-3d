@@ -380,6 +380,17 @@ describe('mapTargets', () => {
     const only = mapTargets([{ k: 'building', t: { building: 'house' }, g: ring(0, 0) }], id);
     expect(only).toEqual([]);
   });
+
+  it('prefers a water pond over the like-named park for the étang', () => {
+    const withPond = [
+      { k: 'green', t: { leisure: 'park', name: 'Etang de Châteaugiron' }, g: ring(100, 5) },
+      { k: 'water', t: { natural: 'water', name: 'Étang de Châteaugiron' }, g: ring(60, 40) },
+    ];
+    const t = mapTargets(withPond, id);
+    const etang = t.find((x) => x.kind === 'etang');
+    expect(etang.x).toBe(60);
+    expect(etang.n).toBe(40); // the pond, not the park at (100, 5)
+  });
 });
 
 describe('namedPlaces', () => {

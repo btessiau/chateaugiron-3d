@@ -23,6 +23,7 @@ export const TAG_KEYS = [
   'tunnel',
   'amenity',
   'historic',
+  'barrier',
 ];
 
 const GREEN_LANDUSE = [
@@ -93,6 +94,9 @@ export function classify(tags) {
   if (tags['building:part'] && tags['building:part'] !== 'no') return 'building';
   if (tags.highway) return 'road';
   if (tags.natural === 'water' || tags.water || tags.waterway === 'riverbank') return 'water';
+  // Property boundaries and the medieval ramparts: walls, hedges, fences, and
+  // rows of trees all read as land borders between the houses.
+  if (tags.barrier || tags.natural === 'tree_row') return 'barrier';
   if (
     GREEN_NATURAL.includes(tags.natural) ||
     GREEN_LANDUSE.includes(tags.landuse) ||
