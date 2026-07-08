@@ -600,6 +600,35 @@ function buildWarMemorial(group, church, groundY, colliders) {
   // Small drum and a domed cap, echoing the rotunda top of the real memorial.
   add(new THREE.CylinderGeometry(0.5, 0.55, 0.5, 12), 5.45 + 0.25, graniteDark);
   add(new THREE.ConeGeometry(0.48, 0.66, 14), 5.95 + 0.33, granite);
+  // Carve the dedication into the dado face that greets the approach, so the
+  // monument reads as the real monument aux morts. The panel matches the granite
+  // so only the lettering shows, like an engraving. Guarded for headless builds.
+  if (typeof document !== 'undefined' && document.createElement) {
+    const cv = document.createElement('canvas');
+    cv.width = 256;
+    cv.height = 200;
+    const g2 = cv.getContext('2d');
+    g2.fillStyle = '#9c988f';
+    g2.fillRect(0, 0, 256, 200);
+    g2.fillStyle = '#312e29';
+    g2.textAlign = 'center';
+    g2.textBaseline = 'middle';
+    g2.font = 'bold 30px Georgia, serif';
+    g2.fillText('1914 · 1918', 128, 38);
+    g2.font = 'bold 18px Georgia, serif';
+    g2.fillText('AUX ENFANTS', 128, 88);
+    g2.fillText('DE CHÂTEAUGIRON', 128, 112);
+    g2.font = 'bold 30px Georgia, serif';
+    g2.fillText('1939 · 1945', 128, 162);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const insc = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.06, 0.83),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }),
+    );
+    insc.position.set(0, 1.66, 0.682);
+    mem.add(insc);
+  }
   mem.position.set(px, gy, pz);
   mem.rotation.y = Math.atan2(-ux, -uz); // a flat face toward the approach
   group.add(mem);
