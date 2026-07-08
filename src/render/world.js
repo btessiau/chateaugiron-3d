@@ -99,13 +99,38 @@ function hashHue(i) {
 }
 
 function slateColor(i) {
-  // Breton roofs are mostly grey-blue slate, with a little tone variation.
-  const r = (Math.sin(i * 78.233) * 43758.5453) % 1;
-  const t = r - Math.floor(r);
-  const hue = 0.58 + t * 0.04;
-  const sat = 0.04 + ((i * 3) % 4) * 0.02;
-  const lig = 0.28 + ((i * 5) % 6) * 0.022;
+  // Per-roof tint that multiplies the real slate photo (the roof material map).
+  // Kept near white so the photo colour dominates, with a faint Breton blue-grey
+  // shift and a little lightness variation from house to house. If the texture is
+  // ever missing the roofs fall back to a pale slate blue, not black.
+  const t = fract01(Math.sin(i * 78.233) * 43758.5453);
+  const hue = 0.58 + t * 0.03;
+  const sat = 0.05 + ((i * 3) % 3) * 0.015;
+  const lig = 0.82 + ((i * 5) % 6) * 0.02;
   return new THREE.Color().setHSL(hue, sat, lig);
+}
+
+// Give a merged geometry simple planar UVs from world X/Z, so a repeating
+// texture tiles every `tile` metres at life size. Good for near-flat, top-lit
+// surfaces such as roofs where a top-down projection reads correctly.
+function planarUV(geo, tile) {
+  const pos = geo.attributes.position;
+  const uv = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    uv[i * 2] = pos.getX(i) / tile;
+    uv[i * 2 + 1] = pos.getZ(i) / tile;
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+}
+
+// Load a tiling CC0 colour map from public/textures as an sRGB repeating texture.
+function tiledTexture(name) {
+  const tex = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/${name}`);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
 }
 
 // A tiling window pattern drawn on a canvas. One window per tile; the building
@@ -1282,9 +1307,11 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
 
   if (roofGeos.length) {
     const merged = mergeGeometries(roofGeos, false);
+    planarUV(merged, 3.0);
     const mat = new THREE.MeshStandardMaterial({
+      map: tiledTexture('roof-slate.jpg'),
       vertexColors: true,
-      roughness: 0.72,
+      roughness: 0.82,
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
