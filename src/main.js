@@ -16,6 +16,7 @@ import { compassFromYaw } from './lib/minimap.js';
 import { addPhotoPoints } from './render/photos.js';
 import { addLandmarkPhotos } from './render/landmarkPhotos.js';
 import { nearestIndex } from './lib/nearest.js';
+import { Ambience } from './render/ambience.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay');
@@ -31,6 +32,18 @@ const photoEl = document.getElementById('photo');
 const photoImg = document.getElementById('photo-img');
 const photoCap = document.getElementById('photo-cap');
 const photoClose = document.getElementById('photo-close');
+const soundEl = document.getElementById('sound');
+
+// Gentle public-domain outdoor ambience, started by the Enter gesture.
+const ambience = new Ambience(`${import.meta.env.BASE_URL}audio/ambience.ogg`);
+function updateSoundLabel() {
+  if (soundEl) soundEl.textContent = ambience.muted ? '🔇 sound' : '🔊 sound';
+}
+function toggleSound() {
+  ambience.toggleMute();
+  updateSoundLabel();
+}
+if (soundEl) soundEl.addEventListener('click', toggleSound);
 
 // ---- Renderer ----
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -260,10 +273,21 @@ async function init() {
 
   // Store projector + game internals for the HUD and for headless captures.
   window.__proj = proj;
-  window.__game = { scene, camera, renderer, player, avatar, getHeight: groundAt, hf, water };
+  window.__game = {
+    scene,
+    camera,
+    renderer,
+    player,
+    avatar,
+    getHeight: groundAt,
+    hf,
+    water,
+    ambience,
+  };
 }
 
 startBtn.addEventListener('click', () => {
+  ambience.start();
   if (ready) player.lock();
 });
 
@@ -309,6 +333,8 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (photoOpen) closePhoto();
     else openNearestPhoto();
+  } else if (e.code === 'KeyM') {
+    toggleSound();
   } else if (e.code === 'Escape' && photoOpen) {
     closePhoto();
   }

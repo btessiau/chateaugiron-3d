@@ -81,6 +81,22 @@
         display: inline-block;
         font-variant-numeric: tabular-nums;
       }
+      #sound {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #cfe3ff;
+        background: rgba(10, 16, 26, 0.55);
+        border: 1px solid rgba(120, 160, 220, 0.25);
+        border-radius: 6px;
+        padding: 2px 8px;
+        display: block;
+        width: fit-content;
+        margin-left: auto;
+        margin-right: auto;
+        cursor: pointer;
+        pointer-events: auto;
+        user-select: none;
+      }
 
       #photo {
         position: fixed;
@@ -241,12 +257,13 @@
 
     <div class="credit">
       Map data © OpenStreetMap contributors (ODbL) · Photos © Panoramax (CC BY-SA 4.0) · Aerial ©
-      IGN · Character by Quaternius (CC0)
+      IGN · Character by Quaternius (CC0) · Ambience: public domain (Wikimedia Commons)
     </div>
 
     <div id="minimap-wrap">
       <canvas id="minimap" width="180" height="180"></canvas>
       <div id="compass">N · 0°</div>
+      <div id="sound" title="Toggle sound (M)">🔊 sound</div>
     </div>
 
     <div id="photo" class="hidden">
@@ -270,6 +287,7 @@
           <span class="key">Space — jump</span>
           <span class="key">V — 1st / 3rd person</span>
           <span class="key">P — real photo here</span>
+          <span class="key">M — sound</span>
           <span class="key">Esc — release</span>
         </div>
         <button class="start" id="start" disabled>Loading town…</button>
