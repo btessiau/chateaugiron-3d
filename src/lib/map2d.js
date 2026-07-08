@@ -237,3 +237,46 @@ export function buildingHeight(tags) {
   const roofRise = parseFloat(tags && tags['roof:height']) || 0;
   return Math.max(2.5, Math.min(eaves + roofRise * 0.5, 20));
 }
+
+// Locate the real, navigable landmarks that actually exist in the data, as
+// jump/minimap targets {kind, label, x, n}. The church classifies by tag; the
+// château is the tallest historic building (the donjon); the étang and the
+// jardin are named greens. Anything missing is simply left out.
+export function mapTargets(features, project) {
+  const out = [];
+  const centroid = (f) => ringCentroid(f.g.map((p) => project(p[0], p[1])));
+
+  const church = features.find((f) => f.k === 'building' && classifyLandmark(f.t) === 'church');
+  if (church) {
+    const c = centroid(church);
+    out.push({ kind: 'church', label: 'Church', x: c.x, n: c.n });
+  }
+
+  let chateau = null;
+  let tallest = -Infinity;
+  for (const f of features) {
+    if (f.k !== 'building' || !f.t || !f.t.historic) continue;
+    const h = parseFloat(f.t.height) || 0;
+    if (h > tallest) {
+      tallest = h;
+      chateau = f;
+    }
+  }
+  if (chateau) {
+    const c = centroid(chateau);
+    out.push({ kind: 'chateau', label: 'Château', x: c.x, n: c.n });
+  }
+
+  const namedGreen = [
+    [/etang|étang/i, 'etang', 'Étang'],
+    [/jardin/i, 'jardin', 'Jardin'],
+  ];
+  for (const [re, kind, label] of namedGreen) {
+    const g = features.find((f) => f.k === 'green' && f.t && f.t.name && re.test(f.t.name));
+    if (g) {
+      const c = centroid(g);
+      out.push({ kind, label, x: c.x, n: c.n });
+    }
+  }
+  return out;
+}

@@ -15,6 +15,7 @@ import {
   nearestPoint,
   classifyLandmark,
   buildingHeight,
+  mapTargets,
 } from './map2d.js';
 
 const id = (lon, lat) => [lon, lat]; // identity projector: input is already metres
@@ -273,5 +274,39 @@ describe('buildingHeight', () => {
     expect(buildingHeight({ building: 'house' })).toBe(3.2);
     expect(buildingHeight(null)).toBe(3.2);
     expect(buildingHeight({ building: 'house', height: '80' })).toBe(20);
+  });
+});
+
+describe('mapTargets', () => {
+  const ring = (cx, cn) => [
+    [cx - 1, cn - 1],
+    [cx + 1, cn - 1],
+    [cx + 1, cn + 1],
+    [cx - 1, cn + 1],
+  ];
+  const feats = [
+    { k: 'building', t: { building: 'church', name: 'Église' }, g: ring(10, 20) },
+    { k: 'building', t: { historic: 'yes', height: '32' }, g: ring(-40, -50) }, // donjon
+    { k: 'building', t: { historic: 'yes' }, g: ring(-40, 10) }, // lower historic, no height
+    { k: 'building', t: { building: 'house' }, g: ring(0, 0) },
+    { k: 'green', t: { leisure: 'park', name: 'Etang de Châteaugiron' }, g: ring(100, 5) },
+    { k: 'green', t: { leisure: 'park', name: 'Jardin de la Glaume' }, g: ring(-80, 30) },
+    { k: 'green', t: {}, g: ring(5, 5) },
+  ];
+
+  it('locates the church, the tallest historic building and the named greens', () => {
+    const t = mapTargets(feats, id);
+    const kinds = t.map((x) => x.kind);
+    expect(kinds).toEqual(['church', 'chateau', 'etang', 'jardin']);
+    const chateau = t.find((x) => x.kind === 'chateau');
+    expect(chateau.x).toBe(-40);
+    expect(chateau.n).toBe(-50); // the h=32 donjon, not the shorter historic building
+    const etang = t.find((x) => x.kind === 'etang');
+    expect(etang.x).toBe(100);
+  });
+
+  it('omits targets that are not in the data', () => {
+    const only = mapTargets([{ k: 'building', t: { building: 'house' }, g: ring(0, 0) }], id);
+    expect(only).toEqual([]);
   });
 });

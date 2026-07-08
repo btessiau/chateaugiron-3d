@@ -9,6 +9,17 @@ export function worldToMinimap(wx, wz, cx, cz, mPerPx, size) {
   };
 }
 
+// Metres-per-pixel needed to fit a world bounds box into a square minimap of
+// `size` px, leaving a fractional `margin` on each side. The wider of the two
+// spans decides the scale so the whole town fits.
+export function minimapScale(bounds, size, margin = 0.06) {
+  const w = bounds.maxX - bounds.minX;
+  const h = bounds.maxN - bounds.minN;
+  const span = Math.max(w, h, 1e-6);
+  const usable = Math.max(1e-6, size * (1 - 2 * margin));
+  return span / usable;
+}
+
 const CARDINALS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 // Compass bearing the player faces, in degrees clockwise from north, plus the

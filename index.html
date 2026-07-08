@@ -90,6 +90,55 @@
         text-align: right;
         color: #4a423a;
       }
+      #minimap {
+        top: 14px;
+        right: 14px;
+        padding: 8px 8px 6px;
+        width: 172px;
+      }
+      #minimap .mm-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #4a423a;
+        margin: 0 2px 6px;
+      }
+      #mini {
+        width: 156px;
+        height: 156px;
+        display: block;
+        margin: 0 auto;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+      }
+      #jump {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+        margin-top: 7px;
+      }
+      #jump button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        background: #fffdf7;
+        color: #2a2320;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 5px 7px;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      #jump button:hover {
+        background: #f0ece0;
+      }
+      #jump .d {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 0, 0, 0.25);
+        flex: none;
+      }
       #zoom {
         margin-top: 4px;
         color: #6a6058;
@@ -168,6 +217,12 @@
       <b>Châteaugiron · 2D</b>
       <span id="compass">N ↑</span>
       <span id="pos">loading…</span>
+    </div>
+
+    <div id="minimap" class="panel">
+      <div class="mm-title">Map · jump to</div>
+      <canvas id="mini" width="312" height="312"></canvas>
+      <div id="jump"></div>
     </div>
 
     <div id="legend" class="panel">

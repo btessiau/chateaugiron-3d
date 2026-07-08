@@ -5,6 +5,7 @@
 
 import { roadWidth } from '../lib/geometry.js';
 import { isWalkableWay, ringCentroid, classifyLandmark, buildingHeight } from '../lib/map2d.js';
+import { worldToMinimap, minimapScale } from '../lib/minimap.js';
 
 const GRASS = '#8ccf77';
 const GRASS_DARK = '#84c86d';
@@ -499,4 +500,101 @@ function drawLabels(ctx, labels, cam, hw, hh, sx, sy, ppm) {
     ctx.fillStyle = big ? '#2a2320' : '#4a423a';
     ctx.fillText(l.text, px, py - (big ? 14 : 0));
   }
+}
+
+export const MARKER_COLOR = {
+  church: '#cf5049',
+  chateau: '#6b7280',
+  halles: '#d99a3f',
+  townhall: '#b06fae',
+  etang: '#5bb8e8',
+  jardin: '#4a9e46',
+};
+
+function miniPath(c, pts, P) {
+  const a = P(pts[0][0], pts[0][1]);
+  c.beginPath();
+  c.moveTo(a.u, a.v);
+  for (let i = 1; i < pts.length; i++) {
+    const p = P(pts[i][0], pts[i][1]);
+    c.lineTo(p.u, p.v);
+  }
+}
+
+// Render the whole town once onto an offscreen canvas: greens, water, faint
+// roads and every building footprint. The result is blitted each frame so the
+// live minimap only has to draw the moving bits on top.
+export function buildMinimapBase(prepared, bounds, size) {
+  const cv = document.createElement('canvas');
+  cv.width = size;
+  cv.height = size;
+  const c = cv.getContext('2d');
+  const mPerPx = minimapScale(bounds, size);
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cz = (bounds.minN + bounds.maxN) / 2;
+  const P = (x, n) => worldToMinimap(x, n, cx, cz, mPerPx, size);
+
+  c.fillStyle = '#bfe3a8';
+  c.fillRect(0, 0, size, size);
+  c.lineJoin = 'round';
+  c.fillStyle = 'rgba(103,185,90,0.75)';
+  for (const g of prepared.greens) {
+    miniPath(c, g.pts, P);
+    c.fill();
+  }
+  c.fillStyle = '#7cc6ec';
+  for (const w of prepared.waters) {
+    miniPath(c, w.pts, P);
+    c.fill();
+  }
+  c.strokeStyle = 'rgba(255,255,255,0.8)';
+  c.lineWidth = 0.7;
+  for (const r of prepared.roads) {
+    miniPath(c, r.pts, P);
+    c.stroke();
+  }
+  c.fillStyle = 'rgba(84,64,50,0.6)';
+  for (const b of prepared.buildings) {
+    miniPath(c, b.pts, P);
+    c.fill();
+  }
+  return { canvas: cv, mPerPx, cx, cz, size };
+}
+
+// Draw the live minimap: the static base, then the current view rectangle, the
+// landmark dots and the player, north-up.
+export function drawMinimap(mctx, base, player, targets, cam, W, H) {
+  const { canvas, mPerPx, cx, cz, size } = base;
+  const P = (x, n) => worldToMinimap(x, n, cx, cz, mPerPx, size);
+  mctx.clearRect(0, 0, size, size);
+  mctx.drawImage(canvas, 0, 0);
+
+  // The slice of town shown in the main view.
+  const halfW = W / (2 * cam.ppm);
+  const halfH = H / (2 * cam.ppm);
+  const tl = P(cam.x - halfW, cam.n + halfH);
+  const br = P(cam.x + halfW, cam.n - halfH);
+  mctx.strokeStyle = 'rgba(30,26,22,0.65)';
+  mctx.lineWidth = 1.4;
+  mctx.strokeRect(tl.u, tl.v, br.u - tl.u, br.v - tl.v);
+
+  for (const t of targets) {
+    const p = P(t.x, t.n);
+    mctx.fillStyle = MARKER_COLOR[t.kind] || '#c98a2a';
+    mctx.beginPath();
+    mctx.arc(p.u, p.v, 3.4, 0, Math.PI * 2);
+    mctx.fill();
+    mctx.strokeStyle = '#fff';
+    mctx.lineWidth = 1.2;
+    mctx.stroke();
+  }
+
+  const pp = P(player.x, player.n);
+  mctx.fillStyle = '#e0483c';
+  mctx.beginPath();
+  mctx.arc(pp.u, pp.v, 3.6, 0, Math.PI * 2);
+  mctx.fill();
+  mctx.strokeStyle = '#fff';
+  mctx.lineWidth = 1.6;
+  mctx.stroke();
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { worldToMinimap, compassFromYaw, headingArrowAngle } from './minimap.js';
+import { worldToMinimap, minimapScale, compassFromYaw, headingArrowAngle } from './minimap.js';
 
 describe('worldToMinimap', () => {
   it('puts the player at the centre', () => {
@@ -12,6 +12,24 @@ describe('worldToMinimap', () => {
     const north = worldToMinimap(0, 20, 0, 0, 2, 180);
     expect(north.v).toBe(90 - 10);
     expect(north.u).toBe(90);
+  });
+});
+
+describe('minimapScale', () => {
+  it('fits the wider span into the minimap, leaving a margin', () => {
+    const bounds = { minX: -100, maxX: 100, minN: -50, maxN: 50 }; // 200 wide, 100 tall
+    const mPerPx = minimapScale(bounds, 200, 0);
+    expect(mPerPx).toBe(1); // 200 m across a 200 px map
+  });
+  it('leaves the requested fractional margin on each side', () => {
+    const bounds = { minX: 0, maxX: 100, minN: 0, maxN: 100 };
+    const mPerPx = minimapScale(bounds, 200, 0.25); // usable = 100 px
+    expect(mPerPx).toBe(1);
+  });
+  it('never divides by zero for a degenerate box', () => {
+    const mPerPx = minimapScale({ minX: 0, maxX: 0, minN: 0, maxN: 0 }, 200);
+    expect(Number.isFinite(mPerPx)).toBe(true);
+    expect(mPerPx).toBeGreaterThan(0);
   });
 });
 

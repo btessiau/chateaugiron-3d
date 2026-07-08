@@ -15,8 +15,15 @@ import {
   isWalkableWay,
   ringCentroid,
   nearestPoint,
+  mapTargets,
 } from './lib/map2d.js';
-import { prepareFeatures, drawWorld } from './map2d/render2d.js';
+import {
+  prepareFeatures,
+  drawWorld,
+  buildMinimapBase,
+  drawMinimap,
+  MARKER_COLOR,
+} from './map2d/render2d.js';
 import { drawTrainer } from './map2d/sprite.js';
 import { treeSpots, lampSpots, benchSpots } from './lib/props2d.js';
 
@@ -28,6 +35,8 @@ const SPRITE_UNIT = 2.4;
 
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
+const mini = document.getElementById('mini');
+const mctx = mini.getContext('2d');
 const hudPos = document.getElementById('pos');
 const hudZoom = document.getElementById('zoom');
 const intro = document.getElementById('intro');
@@ -120,6 +129,24 @@ async function main() {
     }
   }
 
+  // Road vertices, split into walkable ways and everything else. Used to seed
+  // the spawn and the landmark jumps on open ground (roads are never blocked).
+  const walkVerts = [];
+  const roadVerts = [];
+  for (const f of data.features) {
+    if (f.k !== 'road') continue;
+    const bucket = isWalkableWay(f.t && f.t.highway) ? walkVerts : roadVerts;
+    for (const p of f.g) bucket.push(project(p[0], p[1]));
+  }
+  const seedVerts = walkVerts.length ? walkVerts : roadVerts;
+
+  // Move onto the nearest open street to a world point, so we never land inside
+  // a building.
+  function openStreetNear(tx, tn) {
+    const near = nearestPoint(seedVerts, tx, tn) || { x: tx, n: tn };
+    return findOpenSpawn(grid, near.x, near.n, PLAYER_RADIUS);
+  }
+
   // Spawn on the nearest street or path to the church, so the player starts on
   // open ground with the steeple in view and clear room to walk.
   let spawnX = 0;
@@ -131,25 +158,15 @@ async function main() {
     const c = ringCentroid(church.g.map((p) => project(p[0], p[1])));
     spawnX = c.x;
     spawnN = c.n;
-    // Collect walkable-way vertices (fall back to any road) and seed on the
-    // closest one to the church.
-    const walk = [];
-    const anyRoad = [];
-    for (const f of data.features) {
-      if (f.k !== 'road') continue;
-      const bucket = isWalkableWay(f.t && f.t.highway) ? walk : anyRoad;
-      for (const p of f.g) bucket.push(project(p[0], p[1]));
-    }
-    const near = nearestPoint(walk.length ? walk : anyRoad, c.x, c.n);
-    if (near) {
-      spawnX = near.x;
-      spawnN = near.n;
-    }
   }
-  const spawn = findOpenSpawn(grid, spawnX, spawnN, PLAYER_RADIUS);
+  const spawn = openStreetNear(spawnX, spawnN);
 
-  // Landmark anchors for the "near ..." readout.
-  const landmarks = prepared.labels.filter((l) => l.lm);
+  // Real, locatable landmarks for the "near ..." readout, the minimap markers
+  // and the jump menu (church, château, the étang and the jardin).
+  const targets = mapTargets(data.features, project);
+
+  // Whole-town minimap, pre-rendered once, plus the "jump to" buttons.
+  const miniBase = buildMinimapBase(prepared, bounds, mini.width);
 
   const player = { x: spawn.x, n: spawn.n };
   let facing = 'up';
@@ -173,6 +190,39 @@ async function main() {
       },
     };
   }
+
+  // Jump to a landmark by kind, landing on the nearest open street to it.
+  function jumpTo(kind) {
+    const t = targets.find((x) => x.kind === kind);
+    if (!t) return;
+    const s = openStreetNear(t.x, t.n);
+    player.x = s.x;
+    player.n = s.n;
+    if (intro && !intro.classList.contains('hidden')) intro.classList.add('hidden');
+  }
+
+  // Build the jump buttons from the landmarks that actually exist, with a
+  // colour dot matching the minimap marker. Number keys 1..n jump too.
+  const jumpBox = document.getElementById('jump');
+  jumpBox.textContent = '';
+  const jumpKeys = {};
+  targets.forEach((t, i) => {
+    const btn = document.createElement('button');
+    const dot = document.createElement('i');
+    dot.className = 'd';
+    dot.style.background = MARKER_COLOR[t.kind] || '#c98a2a';
+    btn.appendChild(dot);
+    btn.appendChild(document.createTextNode(t.label));
+    btn.addEventListener('click', () => {
+      jumpTo(t.kind);
+      btn.blur();
+    });
+    jumpBox.appendChild(btn);
+    if (i < 9) jumpKeys[`Digit${i + 1}`] = t.kind;
+  });
+  window.addEventListener('keydown', (e) => {
+    if (jumpKeys[e.code]) jumpTo(jumpKeys[e.code]);
+  });
 
   let last = performance.now();
   function frameLoop(now) {
@@ -201,11 +251,12 @@ async function main() {
     const cam = { x: player.x, n: player.n, ppm: zoom };
     drawWorld(ctx, prepared, cam, W, H, props);
     drawTrainer(ctx, W / 2, H / 2 + 8, facing, frame, SPRITE_UNIT);
+    drawMinimap(mctx, miniBase, player, targets, cam, W, H);
 
     posTimer += dt;
     if (posTimer > 0.2) {
       posTimer = 0;
-      updateReadout(landmarks, player);
+      updateReadout(targets, player);
       hudZoom.textContent = `zoom ${zoom}× · ${(1 / zoom).toFixed(2)} m/px`;
     }
     requestAnimationFrame(frameLoop);
@@ -213,18 +264,18 @@ async function main() {
   requestAnimationFrame(frameLoop);
 }
 
-function updateReadout(landmarks, player) {
+function updateReadout(targets, player) {
   let best = null;
   let bestD = Infinity;
-  for (const l of landmarks) {
-    const d = Math.hypot(l.x - player.x, l.n - player.n);
+  for (const t of targets) {
+    const d = Math.hypot(t.x - player.x, t.n - player.n);
     if (d < bestD) {
       bestD = d;
-      best = l;
+      best = t;
     }
   }
   if (best) {
-    hudPos.textContent = `near ${best.text} · ${Math.round(bestD)} m`;
+    hudPos.textContent = `near ${best.label} · ${Math.round(bestD)} m`;
   } else {
     hudPos.textContent = 'Châteaugiron';
   }
