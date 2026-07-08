@@ -1077,10 +1077,10 @@ function foliageTexture() {
   for (const p of puffs) {
     const grd = g.createRadialGradient(p.px, p.py - p.pr * 0.45, p.pr * 0.08, p.px, p.py, p.pr);
     const hv = 1 - p.py / size;
-    const L = Math.min(1, (0.6 + hv * 0.6) * (0.7 + rnd() * 0.4));
-    grd.addColorStop(0, `rgba(${(150 * L) | 0},${(190 * L) | 0},${(88 * L) | 0},1)`);
-    grd.addColorStop(0.6, `rgba(${(70 * L) | 0},${(120 * L) | 0},${(52 * L) | 0},0.96)`);
-    grd.addColorStop(1, `rgba(${(45 * L) | 0},${(84 * L) | 0},${(40 * L) | 0},0)`);
+    const L = Math.min(1, 0.82 + hv * 0.2); // gentle top-light only, otherwise flat
+    grd.addColorStop(0, `rgba(${(132 * L) | 0},${(180 * L) | 0},${(98 * L) | 0},1)`);
+    grd.addColorStop(0.72, `rgba(${(98 * L) | 0},${(152 * L) | 0},${(76 * L) | 0},1)`);
+    grd.addColorStop(1, `rgba(${(98 * L) | 0},${(152 * L) | 0},${(76 * L) | 0},0)`);
     g.fillStyle = grd;
     g.beginPath();
     g.arc(p.px, p.py, p.pr, 0, Math.PI * 2);
@@ -1090,7 +1090,7 @@ function foliageTexture() {
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] > 24) {
-      const n = (rnd() - 0.5) * 26;
+      const n = (rnd() - 0.5) * 10;
       d[i] += n;
       d[i + 1] += n;
       d[i + 2] += n * 0.6;
