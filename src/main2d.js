@@ -31,10 +31,21 @@ import {
 } from './map2d/render2d.js';
 import { drawTrainer } from './map2d/sprite.js';
 import { treeSpots, lampSpots, benchSpots, bushSpots } from './lib/props2d.js';
+import {
+  enterableBuildings,
+  enterableAt,
+  buildInterior,
+  moveInInterior,
+  onExitMat,
+} from './lib/interior.js';
+import { drawInterior } from './map2d/interior.js';
 
 const PLAYER_RADIUS = 0.6;
 const STRIDE = 0.42; // metres per walk-frame flip
 const SPRITE_UNIT = 2.4;
+const INTERIOR_SPEED = 4.6; // metres per second inside a building
+const INTERIOR_RADIUS = 0.4;
+const DOOR_RADIUS = 7; // how close to a door the "enter" prompt appears
 
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
@@ -45,6 +56,7 @@ const hudZoom = document.getElementById('zoom');
 const hudMode = document.getElementById('mode');
 const intro = document.getElementById('intro');
 const placard = document.getElementById('placard');
+const hint = document.getElementById('hint');
 
 let W = 0;
 let H = 0;
@@ -196,6 +208,10 @@ async function main() {
   // walks up to one.
   const places = namedPlaces(data.features, project);
 
+  // The main buildings the player can step inside (churches, château), each with
+  // a reachable door on its footprint.
+  const enterables = enterableBuildings(data.features, project, seedVerts);
+
   // Whole-town minimap, pre-rendered once, plus the "jump to" buttons.
   const miniBase = buildMinimapBase(prepared, bounds, mini.width);
 
@@ -204,6 +220,13 @@ async function main() {
   let frame = 0;
   let strideAcc = 0;
   let posTimer = 0;
+
+  // 'town' = walking the map; 'interior' = inside a landmark. When inside we
+  // keep a separate little world: the room spec, the player's position in room
+  // metres, and where to drop them back outside on the way out.
+  let scene = 'town';
+  let interior = null;
+  let doorNear = null;
 
   // Small debug hook (mirrors the 3D game's window.__game) so headless probes
   // can jump the camera and read the player position.
@@ -224,6 +247,7 @@ async function main() {
 
   // Jump to a landmark by kind, landing on the nearest open street to it.
   function jumpTo(kind) {
+    if (scene !== 'town') return;
     const t = targets.find((x) => x.kind === kind);
     if (!t) return;
     const s = openStreetNear(t.x, t.n);
@@ -231,6 +255,45 @@ async function main() {
     player.n = s.n;
     if (intro && !intro.classList.contains('hidden')) intro.classList.add('hidden');
   }
+
+  // Step inside the building whose door we are standing at, or back out again.
+  function enterBuilding() {
+    if (!doorNear) return;
+    interior = {
+      spec: buildInterior(doorNear.kind, doorNear.area),
+      pos: null,
+      facing: 'up',
+      frame: 0,
+      strideAcc: 0,
+      label: doorNear.label,
+      exitX: player.x,
+      exitN: player.n,
+    };
+    interior.pos = { x: interior.spec.spawn.x, y: interior.spec.spawn.y };
+    scene = 'interior';
+    facing = 'up';
+    frame = 0;
+    placard.classList.remove('show');
+    placardName = null;
+    setHint('');
+  }
+  function leaveBuilding() {
+    if (!interior) return;
+    player.x = interior.exitX;
+    player.n = interior.exitN;
+    interior = null;
+    scene = 'town';
+    setHint('');
+  }
+  window.addEventListener('keydown', (e) => {
+    if (intro && !intro.classList.contains('hidden')) return;
+    if (e.code === 'KeyE' || e.code === 'Enter') {
+      if (scene === 'town') enterBuilding();
+      else if (onExitMat(interior.spec, interior.pos)) leaveBuilding();
+    } else if (e.code === 'Escape' && scene === 'interior') {
+      leaveBuilding();
+    }
+  });
 
   // Build the jump buttons from the landmarks that actually exist, with a
   // colour dot matching the minimap marker. Number keys 1..n jump too.
@@ -260,7 +323,14 @@ async function main() {
   function frameLoop(now) {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
+    if (scene === 'interior') tickInterior(dt);
+    else tickTown(dt);
+    requestAnimationFrame(frameLoop);
+  }
 
+  // A frame of the outdoor map: move on the streets, draw the town, and offer
+  // the "enter" prompt when standing at a main building's door.
+  function tickTown(dt) {
     const v = inputVector(keys);
     const speed = travelSpeed(keys);
     const moved = v.len > 0;
@@ -287,14 +357,59 @@ async function main() {
     drawTrainer(ctx, W / 2, H / 2 + 8, facing, frame, SPRITE_UNIT, keys.bike);
     drawMinimap(mctx, miniBase, player, targets, cam, W, H);
 
+    doorNear = enterableAt(enterables, player.x, player.n, DOOR_RADIUS);
+
     posTimer += dt;
     if (posTimer > 0.2) {
       posTimer = 0;
       updateReadout(targets, player);
-      updatePlacard(places, player);
+      updatePlacard(places, player, doorNear);
       hudZoom.textContent = `zoom ${zoom}× · ${(1 / zoom).toFixed(2)} m/px`;
     }
-    requestAnimationFrame(frameLoop);
+    setHint(doorNear ? `Press E to enter ${doorNear.label}` : '');
+  }
+
+  // A frame inside a landmark: bounded movement in the room, then draw it.
+  function tickInterior(dt) {
+    const v = inputVector(keys);
+    if (v.len > 0) {
+      const r = moveInInterior(
+        interior.spec,
+        interior.pos,
+        v.dx * INTERIOR_SPEED * dt,
+        -v.dn * INTERIOR_SPEED * dt,
+        INTERIOR_RADIUS,
+      );
+      const d = Math.abs(r.x - interior.pos.x) + Math.abs(r.y - interior.pos.y);
+      interior.pos = r;
+      interior.facing = facingFrom(v.dx, v.dn, interior.facing);
+      interior.strideAcc += d;
+      if (interior.strideAcc >= STRIDE) {
+        interior.strideAcc = 0;
+        interior.frame = interior.frame === 0 ? 1 : 0;
+      }
+    } else {
+      interior.frame = 0;
+      interior.strideAcc = 0;
+    }
+
+    drawInterior(
+      ctx,
+      interior.spec,
+      interior.pos,
+      interior.facing,
+      interior.frame,
+      W,
+      H,
+      interior.label,
+    );
+
+    posTimer += dt;
+    if (posTimer > 0.2) {
+      posTimer = 0;
+      hudPos.textContent = `Inside · ${interior.label}`;
+    }
+    setHint(onExitMat(interior.spec, interior.pos) ? 'Press E or Esc to leave' : 'Esc to leave');
   }
   requestAnimationFrame(frameLoop);
 }
@@ -317,10 +432,11 @@ function updateReadout(targets, player) {
 }
 
 // Raise a placard naming the building the player is standing at, once they are
-// within a few metres of a named place. Hidden again as they walk away.
+// within a few metres of a named place. Hidden again as they walk away. When an
+// "enter" prompt is showing for the same building, the placard steps aside.
 let placardName = null;
-function updatePlacard(places, player) {
-  const hit = nearestWithin(places, player.x, player.n, 12);
+function updatePlacard(places, player, doorNear) {
+  const hit = doorNear ? null : nearestWithin(places, player.x, player.n, 12);
   const name = hit ? hit.place.label : null;
   if (name === placardName) return;
   placardName = name;
@@ -329,6 +445,19 @@ function updatePlacard(places, player) {
     placard.classList.add('show');
   } else {
     placard.classList.remove('show');
+  }
+}
+
+// Show or hide the green action prompt (enter / leave a building).
+let hintText = '';
+function setHint(text) {
+  if (text === hintText) return;
+  hintText = text;
+  if (text) {
+    hint.textContent = text;
+    hint.classList.add('show');
+  } else {
+    hint.classList.remove('show');
   }
 }
 

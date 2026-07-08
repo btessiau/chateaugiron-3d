@@ -180,6 +180,31 @@
         opacity: 1;
         transform: translate(-50%, 0);
       }
+      #hint {
+        position: fixed;
+        left: 50%;
+        bottom: 84px;
+        transform: translate(-50%, 10px);
+        background: #2a8f4a;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        padding: 8px 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(0, 0, 0, 0.14);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+        pointer-events: none;
+        opacity: 0;
+        transition:
+          opacity 0.15s ease,
+          transform 0.15s ease;
+        z-index: 31;
+      }
+      #hint.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
       a.link {
         color: #1f6feb;
         text-decoration: none;
@@ -250,6 +275,7 @@
   <body>
     <canvas id="map"></canvas>
     <div id="placard"></div>
+    <div id="hint"></div>
 
     <div id="topbar" class="panel">
       <b>Châteaugiron · 2D</b>
@@ -275,7 +301,7 @@
 
     <div id="controls" class="panel">
       <div>WASD / arrows · move · Shift · run</div>
-      <div>B · bike (faster) · + / − or wheel · zoom</div>
+      <div>B · bike (faster) · E · enter a building</div>
       <div id="zoom">zoom</div>
       <div style="margin-top: 6px">
         <a class="link" href="./play3d.html">→ 3D game</a>
