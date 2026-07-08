@@ -12,27 +12,36 @@ export const ROAD_WIDTH = {
   living_street: 4.5,
   service: 3.5,
   pedestrian: 4,
-  footway: 1.8,
-  path: 1.6,
+  footway: 2.2,
+  path: 2.0,
   cycleway: 2,
   track: 3,
-  steps: 1.5,
+  steps: 2.0,
 };
 export const DEFAULT_ROAD_WIDTH = 4;
 
+// Flat cartoon road colours for the toy town. Vehicle roads are a clean warm
+// grey, like painted model streets. Every walkable way (pedestrian, footway,
+// path, steps, cycleway, track) is a distinct warm tan so the player can see
+// the pavements and lanes they can actually walk, matching the real network.
 export const ROAD_COLOR = {
-  primary: 0x3a3d42,
-  secondary: 0x3d4045,
-  tertiary: 0x42454a,
-  residential: 0x46494e,
-  service: 0x4a4d52,
-  pedestrian: 0x6a5f4d,
-  footway: 0x6f6350,
-  path: 0x6f6350,
-  cycleway: 0x4a4457,
-  steps: 0x6f6350,
+  motorway: 0x9a938a,
+  trunk: 0x9d968d,
+  primary: 0x9a938a,
+  secondary: 0x9f9890,
+  tertiary: 0xa39c93,
+  unclassified: 0xa8a199,
+  residential: 0xa8a199,
+  living_street: 0xb0a99f,
+  service: 0xada69d,
+  pedestrian: 0xcbb389,
+  footway: 0xd2ba90,
+  path: 0xd2ba90,
+  cycleway: 0xbfb59a,
+  track: 0xc9b98f,
+  steps: 0xd2ba90,
 };
-export const DEFAULT_ROAD_COLOR = 0x45484d;
+export const DEFAULT_ROAD_COLOR = 0xa39c93;
 
 export function roadWidth(highway) {
   return ROAD_WIDTH[highway] ?? DEFAULT_ROAD_WIDTH;

@@ -15,7 +15,12 @@ import {
 describe('roadWidth / roadColor', () => {
   it('returns known values', () => {
     expect(roadWidth('residential')).toBe(5);
-    expect(roadColor('residential')).toBe(0x46494e);
+    expect(roadColor('residential')).toBe(0xa8a199);
+  });
+  it('paints walkable ways a distinct tan from vehicle roads', () => {
+    expect(roadColor('footway')).toBe(0xd2ba90);
+    expect(roadColor('footway')).not.toBe(roadColor('residential'));
+    expect(roadColor('steps')).toBe(roadColor('footway'));
   });
   it('falls back to defaults', () => {
     expect(roadWidth('mystery')).toBe(DEFAULT_ROAD_WIDTH);
