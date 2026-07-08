@@ -69,7 +69,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.0;
 app.appendChild(renderer.domElement);
 
 // ---- Scene, sky, fog ----
@@ -77,7 +77,7 @@ const scene = new THREE.Scene();
 // The town is small and dense, so the horizon is pulled in with haze. You see a
 // believable few hundred metres and the landmarks nearby, not the whole 3.4 km
 // map and the fields beyond, the way you cannot see across a real town.
-scene.fog = new THREE.Fog(0xcbd2d6, 140, 520);
+scene.fog = new THREE.Fog(0xb4c6d6, 150, 560);
 
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 4000);
 
@@ -88,8 +88,8 @@ const SUN_AZIM = 138;
 const sunDir = sunPosition(SUN_ELEV, SUN_AZIM, 1);
 const sky = new Sky();
 sky.scale.setScalar(10000);
-sky.material.uniforms.turbidity.value = 4.0;
-sky.material.uniforms.rayleigh.value = 2.4;
+sky.material.uniforms.turbidity.value = 3.0;
+sky.material.uniforms.rayleigh.value = 3.2;
 sky.material.uniforms.mieCoefficient.value = 0.006;
 sky.material.uniforms.mieDirectionalG.value = 0.8;
 sky.material.uniforms.sunPosition.value.set(sunDir.x, sunDir.y, sunDir.z);
