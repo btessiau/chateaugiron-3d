@@ -1417,8 +1417,27 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       if (!shape) continue;
       const base = baseHeight(f.t);
       const top = buildingHeight(f.t, polygonArea(pts), bi);
+      const wallH = Math.max(1.5, top - base); // real eaves height from IGN BD TOPO
+
+      // Pitched slate roof on top of the wall. Skip tiny footprints and very
+      // large ones (big commercial or civic blocks read better flat).
+      const box = orientedBox(pts);
+      const area4 = 4 * box.L * box.W;
+      const gabled = box.L >= 1.5 && box.W >= 1.0 && box.W <= 22 && area4 <= 2200;
+
+      // Real roof rise (ridge minus eaves) from IGN BD TOPO when we have it,
+      // else a width-based guess.
+      const rrTag = f.t['roof:height'];
+      const realRise = rrTag != null ? parseFloat(rrTag) : NaN;
+      const roofH = Number.isFinite(realRise)
+        ? Math.min(Math.max(realRise, 0.8), 9)
+        : Math.min(Math.max(box.W * 0.8, 1.0), 4.5);
+      // Flat blocks carry no separate roof mesh, so raise the wall to the real
+      // ridge instead of stopping at the eaves.
+      const flatExtra = !gabled && Number.isFinite(realRise) ? realRise : 0;
+
       const embed = 1.5; // sink the base into the terrain so slopes leave no gap
-      const depth = Math.max(1.5, top - base) + embed;
+      const depth = wallH + flatExtra + embed;
       let geo;
       try {
         geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1 });
@@ -1430,10 +1449,6 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       setColorAttr(geo, hashHue(bi));
       buildingGeos.push(geo);
 
-      // Pitched slate roof on top of the wall. Skip tiny footprints and very
-      // large ones (big commercial or civic blocks read better flat).
-      const box = orientedBox(pts);
-
       // Skin this footprint's street front with a real facade photo when it is
       // one of the curated old-town hosts.
       for (const host of oldTownHosts) {
@@ -1442,7 +1457,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
           landmarks.oldtown.push({
             box,
             gy: groundY(cx, cz) + base,
-            height: Math.max(1.5, top - base),
+            height: wallH,
             face: host.face,
             photo: host.photo,
           });
@@ -1451,10 +1466,8 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
         }
       }
 
-      const area4 = 4 * box.L * box.W;
-      if (box.L >= 1.5 && box.W >= 1.0 && box.W <= 22 && area4 <= 2200) {
-        const roofH = Math.min(Math.max(box.W * 0.8, 1.0), 4.5);
-        const wallTop = groundY(cx, cz) + base + Math.max(1.5, top - base);
+      if (gabled) {
+        const wallTop = groundY(cx, cz) + base + wallH;
         const rp = gableRoofPositions(box, wallTop, roofH);
         const rgeo = new THREE.BufferGeometry();
         rgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(rp), 3));
