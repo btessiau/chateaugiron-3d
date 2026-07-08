@@ -278,6 +278,67 @@ function makeFacadeTexture() {
   return tex;
 }
 
+// A tiling half-timber (colombage) panel: cream lime-plaster infill framed by
+// dark oak posts, rails and diagonal braces, with a small window. One tile is
+// about one bay by one storey, so the walls of the medieval core read as
+// timber-framed houses instead of plain plaster.
+function makeHalfTimberTexture() {
+  const s = 128;
+  const cv =
+    typeof document !== 'undefined' && document.createElement
+      ? document.createElement('canvas')
+      : null;
+  if (!cv) return null;
+  cv.width = s;
+  cv.height = s;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#e7ddc6';
+  ctx.fillRect(0, 0, s, s);
+  for (let i = 0; i < 240; i++) {
+    ctx.fillStyle = `rgba(150,132,98,${0.04 + Math.random() * 0.06})`;
+    ctx.fillRect(
+      Math.random() * s,
+      Math.random() * s,
+      1 + Math.random() * 2,
+      1 + Math.random() * 2,
+    );
+  }
+  const beam = '#463321';
+  ctx.fillStyle = beam;
+  const p = 8;
+  ctx.fillRect(0, 0, p, s); // posts at both edges tile into continuous verticals
+  ctx.fillRect(s - p, 0, p, s);
+  ctx.fillRect(0, 0, s, p); // rails at top and bottom
+  ctx.fillRect(0, s - p, s, p);
+  ctx.fillRect(0, s * 0.5 - 5, s, 10); // mid rail between the two storeys
+  ctx.strokeStyle = beam;
+  ctx.lineWidth = 9;
+  ctx.lineCap = 'square';
+  ctx.beginPath();
+  ctx.moveTo(p, s - p); // lower-panel braces, the classic shallow V
+  ctx.lineTo(s * 0.5, s * 0.55);
+  ctx.moveTo(s - p, s - p);
+  ctx.lineTo(s * 0.5, s * 0.55);
+  ctx.moveTo(p, s * 0.5); // upper-panel brace on the left
+  ctx.lineTo(s * 0.42, p);
+  ctx.stroke();
+  ctx.fillStyle = '#33404b'; // small window in the upper panel
+  ctx.fillRect(s * 0.56, s * 0.15, s * 0.3, s * 0.23);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Deterministic 0..1 hash from a building index, so the same footprints get
+// timbered on every load without storing any state.
+function htHash(i) {
+  let h = (i * 2654435761) >>> 0;
+  h ^= h >>> 15;
+  return ((h >>> 0) % 1000) / 1000;
+}
+
 // Multiply a tiling facade texture onto the vertical walls of the merged
 // building mesh, in world space, leaving roofs and flat tops untouched.
 function applyFacade(mat, tex, scale = 1 / 3.0) {
@@ -1413,6 +1474,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   };
 
   const buildingGeos = [];
+  const halfTimberGeos = [];
   const roofGeos = [];
   const chimneySpecs = [];
   const towerGeos = [];
@@ -1440,6 +1502,14 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     { at: [23.2, 29.1], photo: 'oldtown_facade_02', face: [31.4, 31.7] },
     { at: [-0.9, -42.1], photo: 'oldtown_facade_01', face: [-1.7, -32.5] },
     { at: [-37.0, -187.5], photo: 'oldtown_facade_03', face: [-35.0, -193.4] },
+  ];
+  // Historic-core anchors in world metres: the chateau keep and the church
+  // square. The half-timbered houses of the real town cluster around these, so
+  // small buildings within these radii get a colombage facade instead of the
+  // plain plaster shader.
+  const htCore = [
+    { x: -77, z: -27, r: 135 },
+    { x: -62, z: -247, r: 80 },
   ];
   let bi = 0;
   for (const f of data.features) {
@@ -1488,7 +1558,8 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       const shape = ringToShape(pts);
       if (!shape) continue;
       const base = baseHeight(f.t);
-      const rawTop = buildingHeight(f.t, polygonArea(pts), bi);
+      const areaM = polygonArea(pts);
+      const rawTop = buildingHeight(f.t, areaM, bi);
       // Cap ordinary town buildings so none rivals the 34 m donjon or the church
       // spire. The real town has almost nothing above four storeys.
       const wallH = Math.min(Math.max(1.5, rawTop - base), 15);
@@ -1525,8 +1596,24 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       }
       geo.rotateX(-Math.PI / 2);
       geo.translate(0, groundY(cx, cz) + base - embed, 0);
-      setColorAttr(geo, hashHue(bi));
-      buildingGeos.push(geo);
+      // The medieval core reads as timber-framed houses: small two-storey
+      // buildings near the chateau and church square get a colombage facade,
+      // the rest keep the plain Breton plaster. A deterministic hash leaves a
+      // believable mix of timbered and stone fronts, not a whole block of one.
+      const inCore = htCore.some((c) => Math.hypot(cx - c.x, cz - c.z) <= c.r);
+      const notHost = !oldTownHosts.some((h) => Math.hypot(cx - h.at[0], cz - h.at[1]) <= 2.5);
+      const halfTimber =
+        inCore &&
+        notHost &&
+        gabled &&
+        wallH >= 4 &&
+        areaM <= 260 &&
+        box.L <= 16 &&
+        box.W <= 12 &&
+        htHash(bi) < 0.62;
+      setColorAttr(geo, halfTimber ? new THREE.Color(0xe9ddc2) : hashHue(bi));
+      if (halfTimber) halfTimberGeos.push(geo);
+      else buildingGeos.push(geo);
 
       // Skin this footprint's street front with a real facade photo when it is
       // one of the curated old-town hosts.
@@ -1679,6 +1766,25 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     });
     applyFacade(wallMat, makeFacadeTexture());
     for (const mesh of chunkMeshes(buildingGeos, CHUNK_M, wallMat, (g) =>
+      g.computeVertexNormals(),
+    )) {
+      group.add(mesh);
+      cullables.push(mesh);
+    }
+  }
+
+  // Half-timbered houses of the medieval core: same world-space triplanar
+  // facade shader, but a colombage panel instead of the plaster-and-window
+  // one. Chunked so it culls like the rest of the town.
+  if (halfTimberGeos.length) {
+    const htMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.9,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+    applyFacade(htMat, makeHalfTimberTexture(), 1 / 3.2);
+    for (const mesh of chunkMeshes(halfTimberGeos, CHUNK_M, htMat, (g) =>
       g.computeVertexNormals(),
     )) {
       group.add(mesh);
