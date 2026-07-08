@@ -12,15 +12,74 @@ const SHIRT_SHADE = '#2f63ab';
 const TROUSERS = '#39434f';
 const SHOES = '#26292e';
 const OUTLINE = 'rgba(30,24,20,0.55)';
+const BIKE_FRAME = '#e0483c';
+const WHEEL = '#26292e';
+const WHEEL_HUB = '#9aa0a6';
+const BIKE_METAL = '#c7ced3';
 
 function rect(ctx, x, y, w, h, color) {
   ctx.fillStyle = color;
   ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 
+// A little bicycle under the trainer, drawn so their feet sit near the pedals.
+// Reads as a side-on bike when moving sideways, and a compact front-on bike
+// (two wheels plus handlebars) when moving up or down. A single spoke turns
+// with `frame` to imply the wheels spinning.
+function drawBike(ctx, cx, cy, facing, frame, u) {
+  const wr = 3.2 * u;
+  const wy = cy - wr * 0.4;
+  ctx.save();
+  ctx.lineCap = 'round';
+  if (facing === 'up' || facing === 'down') {
+    const dx = 3.4 * u;
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = WHEEL;
+      ctx.beginPath();
+      ctx.ellipse(cx + s * dx, wy, wr * 0.5, wr, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    rect(ctx, cx - 4.6 * u, wy - wr - 0.6 * u, 9.2 * u, u * 1.1, BIKE_METAL);
+    rect(ctx, cx - dx - 0.6 * u, wy - wr, 1.2 * u, wr * 1.6, BIKE_FRAME);
+    rect(ctx, cx + dx - 0.6 * u, wy - wr, 1.2 * u, wr * 1.6, BIKE_FRAME);
+  } else {
+    const dx = 5 * u;
+    const spin = frame === 1 ? Math.PI / 4 : 0;
+    for (const s of [-1, 1]) {
+      const wx = cx + s * dx;
+      ctx.fillStyle = WHEEL;
+      ctx.beginPath();
+      ctx.arc(wx, wy, wr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = WHEEL_HUB;
+      ctx.beginPath();
+      ctx.arc(wx, wy, wr * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = WHEEL_HUB;
+      ctx.lineWidth = Math.max(1, u * 0.35);
+      ctx.beginPath();
+      ctx.moveTo(wx - Math.cos(spin) * wr, wy - Math.sin(spin) * wr);
+      ctx.lineTo(wx + Math.cos(spin) * wr, wy + Math.sin(spin) * wr);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = BIKE_FRAME;
+    ctx.lineWidth = Math.max(1.5, u * 0.9);
+    ctx.beginPath();
+    ctx.moveTo(cx - dx, wy);
+    ctx.lineTo(cx + 0.5 * u, wy - wr * 0.1);
+    ctx.lineTo(cx + dx, wy);
+    ctx.moveTo(cx + 0.5 * u, wy - wr * 0.1);
+    ctx.lineTo(cx - 1.2 * u, wy - wr * 1.7);
+    ctx.stroke();
+    const hx = cx + dx;
+    rect(ctx, hx - 0.6 * u, wy - wr * 1.8, 1.2 * u, wr * 1.3, BIKE_FRAME);
+  }
+  ctx.restore();
+}
+
 // Draw the trainer so their feet sit at (cx, cy). `u` is one sprite unit in
 // pixels; the whole figure is about 12u wide and 22u tall. `frame` is 0 or 1.
-export function drawTrainer(ctx, cx, cy, facing, frame, u) {
+export function drawTrainer(ctx, cx, cy, facing, frame, u, bike = false) {
   const bob = frame === 1 ? -u * 0.6 : 0; // gentle up-bob on the second frame
   const top = cy - 22 * u + bob;
 
@@ -28,9 +87,12 @@ export function drawTrainer(ctx, cx, cy, facing, frame, u) {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath();
-  ctx.ellipse(cx, cy - u * 0.6, 7 * u, 2.6 * u, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy - u * 0.6, (bike ? 9 : 7) * u, 2.6 * u, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+
+  // The bike sits under the rider, drawn before the legs so they overlap it.
+  if (bike) drawBike(ctx, cx, cy, facing, frame, u);
 
   // Legs + shoes, with an alternating stride.
   const stride = frame === 1 ? u * 1.1 : 0;

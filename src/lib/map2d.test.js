@@ -5,11 +5,16 @@ import {
   featureBounds,
   makeGrid,
   fillPolygon,
+  stampSegment,
+  roadHalfWidth,
   isBlocked,
   blockedFootprint,
   stepPlayer,
+  glide,
   inputVector,
   facingFrom,
+  travelSpeed,
+  TRAVEL,
   findOpenSpawn,
   ringCentroid,
   nearestPoint,
@@ -145,6 +150,38 @@ describe('stepPlayer', () => {
   });
   it('does nothing when both axes are zero', () => {
     expect(stepPlayer(g, { x: 3, n: 3 }, 0, 0, 0.4)).toEqual({ x: 3, n: 3 });
+  });
+});
+
+describe('glide', () => {
+  it('goes straight when the desired heading is open', () => {
+    const g = makeGrid({ minX: 0, minN: 0, maxX: 20, maxN: 20 }, 1);
+    const p = glide(g, { x: 5, n: 5 }, 1, 0, 0.4);
+    expect(p.x).toBeCloseTo(6);
+    expect(p.n).toBeCloseTo(5);
+  });
+  it('stays put with no input', () => {
+    const g = makeGrid({ minX: 0, minN: 0, maxX: 20, maxN: 20 }, 1);
+    expect(glide(g, { x: 5, n: 5 }, 0, 0, 0.4)).toEqual({ x: 5, n: 5 });
+  });
+  it('fans out to a clear heading when the straight path is blocked', () => {
+    // A wall directly east of the player. Pushing east must veer around it
+    // rather than stopping dead.
+    const g = makeGrid({ minX: 0, minN: 0, maxX: 20, maxN: 20 }, 1);
+    fillPolygon(g, [
+      [6, 2],
+      [7, 2],
+      [7, 8],
+      [6, 8],
+    ]);
+    const p = glide(g, { x: 5, n: 5 }, 1, 0, 0.4);
+    expect(p.x).not.toBe(5); // it moved
+    expect(Math.abs(p.n - 5)).toBeGreaterThan(0); // veered off the straight line
+  });
+  it('stays put when every heading is blocked', () => {
+    const g = makeGrid({ minX: 0, minN: 0, maxX: 20, maxN: 20 }, 1);
+    g.data.fill(1);
+    expect(glide(g, { x: 5, n: 5 }, 1, 0, 0.4)).toEqual({ x: 5, n: 5 });
   });
 });
 
@@ -394,5 +431,57 @@ describe('nearestWithin', () => {
   });
   it('returns null when nothing is inside the radius', () => {
     expect(nearestWithin(places, 50, 0, 12)).toBe(null);
+  });
+});
+
+describe('travelSpeed', () => {
+  it('walks and runs on foot', () => {
+    expect(travelSpeed({})).toBe(TRAVEL.walk);
+    expect(travelSpeed({ run: true })).toBe(TRAVEL.run);
+  });
+  it('is much faster on the bicycle, and faster still sprinting', () => {
+    expect(travelSpeed({ bike: true })).toBe(TRAVEL.bike);
+    expect(travelSpeed({ bike: true, run: true })).toBe(TRAVEL.bikeSprint);
+    expect(TRAVEL.bike).toBeGreaterThan(TRAVEL.run);
+  });
+  it('defaults to walking with no argument', () => {
+    expect(travelSpeed()).toBe(TRAVEL.walk);
+  });
+});
+
+describe('roadHalfWidth', () => {
+  it('gives wider strips to bigger roads and a default for the unknown', () => {
+    expect(roadHalfWidth('secondary')).toBeGreaterThan(roadHalfWidth('footway'));
+    expect(roadHalfWidth('footway')).toBe(1.4);
+    expect(roadHalfWidth('some-other')).toBe(2);
+    expect(roadHalfWidth(undefined)).toBe(2);
+  });
+});
+
+describe('stampSegment', () => {
+  const bounds = { minX: 0, minN: 0, maxX: 20, maxN: 20 };
+
+  it('carves a passable strip along a segment, leaving the rest blocked', () => {
+    const g = makeGrid(bounds, 1);
+    g.data.fill(1);
+    stampSegment(g, 2, 10, 18, 10, 1.2, 0);
+    expect(isBlocked(g, 10, 10)).toBe(false); // on the line
+    expect(isBlocked(g, 10, 10.5)).toBe(false); // within the half-width
+    expect(isBlocked(g, 10, 14)).toBe(true); // clear of the strip
+    expect(isBlocked(g, 10, 2)).toBe(true);
+  });
+
+  it('clamps to the grid when the segment runs past the edges', () => {
+    const g = makeGrid(bounds, 1);
+    stampSegment(g, -10, 5, 30, 5, 1.5, 1); // extends beyond both x edges
+    expect(isBlocked(g, 0.5, 5)).toBe(true); // stamped near the left edge
+    expect(isBlocked(g, 19.5, 5)).toBe(true); // and the right edge
+  });
+
+  it('clamps top and bottom for a segment past the north/south edges', () => {
+    const g = makeGrid(bounds, 1);
+    stampSegment(g, 5, -10, 5, 30, 1.5, 1); // extends beyond both n edges
+    expect(isBlocked(g, 5, 0.5)).toBe(true); // stamped near the bottom edge
+    expect(isBlocked(g, 5, 19.5)).toBe(true); // and the top edge
   });
 });

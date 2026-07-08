@@ -7,9 +7,11 @@ import {
   featureBounds,
   makeGrid,
   fillPolygon,
+  stampSegment,
+  roadHalfWidth,
   inputVector,
   facingFrom,
-  stepPlayer,
+  glide,
   findOpenSpawn,
   classifyLandmark,
   isWalkableWay,
@@ -18,6 +20,7 @@ import {
   mapTargets,
   namedPlaces,
   nearestWithin,
+  travelSpeed,
 } from './lib/map2d.js';
 import {
   prepareFeatures,
@@ -29,9 +32,7 @@ import {
 import { drawTrainer } from './map2d/sprite.js';
 import { treeSpots, lampSpots, benchSpots } from './lib/props2d.js';
 
-const WALK_SPEED = 4.6; // metres per second
-const RUN_SPEED = 9.5;
-const PLAYER_RADIUS = 1.0;
+const PLAYER_RADIUS = 0.6;
 const STRIDE = 0.42; // metres per walk-frame flip
 const SPRITE_UNIT = 2.4;
 
@@ -41,6 +42,7 @@ const mini = document.getElementById('mini');
 const mctx = mini.getContext('2d');
 const hudPos = document.getElementById('pos');
 const hudZoom = document.getElementById('zoom');
+const hudMode = document.getElementById('mode');
 const intro = document.getElementById('intro');
 const placard = document.getElementById('placard');
 
@@ -57,7 +59,7 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
-const keys = { up: false, down: false, left: false, right: false, run: false };
+const keys = { up: false, down: false, left: false, right: false, run: false, bike: false };
 const KEYMAP = {
   ArrowUp: 'up',
   KeyW: 'up',
@@ -75,6 +77,9 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     keys.run = true;
+  } else if (e.code === 'KeyB') {
+    keys.bike = !keys.bike;
+    updateMode();
   } else if (e.code === 'Equal' || e.code === 'NumpadAdd') {
     zoom = Math.min(14, zoom + 1);
   } else if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
@@ -94,6 +99,13 @@ canvas.addEventListener(
   },
   { passive: false },
 );
+
+// Show whether the player is on foot or on the bicycle.
+function updateMode() {
+  if (!hudMode) return;
+  hudMode.textContent = keys.bike ? 'cycling' : 'on foot';
+  hudMode.classList.toggle('bike', keys.bike);
+}
 
 async function main() {
   resize();
@@ -120,9 +132,20 @@ async function main() {
     benches: benchSpots(data.features, project),
   };
 
-  // Collision grid: buildings and water block, everything else is walkable.
+  // Collision grid. The map starts fully blocked; we carve the road and path
+  // network as the only passable ground, then re-block any building or water on
+  // top. So the player can only ever move on real streets and walkable paths.
   const bounds = featureBounds(data.features, project);
   const grid = makeGrid(bounds, 1);
+  grid.data.fill(1);
+  for (const f of data.features) {
+    if (f.k !== 'road') continue;
+    const hw = roadHalfWidth(f.t && f.t.highway);
+    const pts = f.g.map((p) => project(p[0], p[1]));
+    for (let i = 0; i + 1 < pts.length; i++) {
+      stampSegment(grid, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], hw, 0);
+    }
+  }
   for (const f of data.features) {
     if (f.k === 'building' || f.k === 'water') {
       fillPolygon(
@@ -230,6 +253,7 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (jumpKeys[e.code]) jumpTo(jumpKeys[e.code]);
   });
+  updateMode();
 
   let last = performance.now();
   function frameLoop(now) {
@@ -237,16 +261,18 @@ async function main() {
     last = now;
 
     const v = inputVector(keys);
-    const speed = keys.run ? RUN_SPEED : WALK_SPEED;
+    const speed = travelSpeed(keys);
     const moved = v.len > 0;
     if (moved) {
-      const next = stepPlayer(grid, player, v.dx * speed * dt, v.dn * speed * dt, PLAYER_RADIUS);
+      const next = glide(grid, player, v.dx * speed * dt, v.dn * speed * dt, PLAYER_RADIUS);
       const realDist = Math.abs(next.x - player.x) + Math.abs(next.n - player.n);
       player.x = next.x;
       player.n = next.n;
       facing = facingFrom(v.dx, v.dn, facing);
+      // On the bike the wheels spin fast; on foot the legs flip every stride.
       strideAcc += realDist;
-      if (strideAcc >= STRIDE) {
+      const strideStep = keys.bike ? STRIDE * 1.6 : STRIDE;
+      if (strideAcc >= strideStep) {
         strideAcc = 0;
         frame = frame === 0 ? 1 : 0;
       }
@@ -257,7 +283,7 @@ async function main() {
 
     const cam = { x: player.x, n: player.n, ppm: zoom };
     drawWorld(ctx, prepared, cam, W, H, props);
-    drawTrainer(ctx, W / 2, H / 2 + 8, facing, frame, SPRITE_UNIT);
+    drawTrainer(ctx, W / 2, H / 2 + 8, facing, frame, SPRITE_UNIT, keys.bike);
     drawMinimap(mctx, miniBase, player, targets, cam, W, H);
 
     posTimer += dt;

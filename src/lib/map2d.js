@@ -90,6 +90,53 @@ export function fillPolygon(grid, ring) {
   }
 }
 
+// Half-width in metres of the walkable strip carved for each kind of way, kept
+// close to the width each road is actually drawn (see geometry.ROAD_WIDTH) so
+// the passable ground matches what the player sees. A small floor keeps even the
+// thinnest footpath wide enough to move along.
+const ROAD_HALF = {
+  primary: 5,
+  trunk: 5.5,
+  secondary: 4,
+  tertiary: 3.25,
+  residential: 2.5,
+  unclassified: 2.5,
+  service: 1.75,
+  living_street: 2.25,
+  pedestrian: 2,
+  footway: 1.4,
+  path: 1.4,
+  cycleway: 1.4,
+  steps: 1.4,
+  track: 1.5,
+};
+export function roadHalfWidth(highway) {
+  return ROAD_HALF[highway] || 2;
+}
+
+// Stamp every grid cell within `r` metres of the segment a->b to `value`. Used
+// to carve the road and path network (value 0, passable) out of an otherwise
+// blocked map, so the player can only move on streets and paths.
+export function stampSegment(grid, ax, an, bx, bn, r, value) {
+  let c0 = Math.floor((Math.min(ax, bx) - r - grid.minX) / grid.cell);
+  let c1 = Math.floor((Math.max(ax, bx) + r - grid.minX) / grid.cell);
+  let r0 = Math.floor((Math.min(an, bn) - r - grid.minN) / grid.cell);
+  let r1 = Math.floor((Math.max(an, bn) + r - grid.minN) / grid.cell);
+  if (c0 < 0) c0 = 0;
+  if (r0 < 0) r0 = 0;
+  if (c1 > grid.cols - 1) c1 = grid.cols - 1;
+  if (r1 > grid.rows - 1) r1 = grid.rows - 1;
+  for (let cy = r0; cy <= r1; cy++) {
+    const py = grid.minN + (cy + 0.5) * grid.cell;
+    for (let cx = c0; cx <= c1; cx++) {
+      const px = grid.minX + (cx + 0.5) * grid.cell;
+      if (distToSegment(px, py, ax, an, bx, bn) <= r) {
+        grid.data[cy * grid.cols + cx] = value;
+      }
+    }
+  }
+}
+
 // True if the metre point falls in a blocked cell or off the edge of the map.
 export function isBlocked(grid, x, n) {
   const cx = Math.floor((x - grid.minX) / grid.cell);
@@ -120,6 +167,24 @@ export function stepPlayer(grid, pos, dx, dn, r) {
   return { x, n };
 }
 
+// Move the player one step, but if the desired heading is blocked, fan out to
+// nearby headings and take the first that is clear. This lets a single held key
+// follow a curving lane or slide along a wall instead of snagging the moment the
+// road bends, while still never entering a blocked (off-road) cell.
+const GLIDE_FAN = [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2];
+export function glide(grid, pos, dx, dn, r) {
+  const speed = Math.hypot(dx, dn);
+  if (speed === 0) return { x: pos.x, n: pos.n };
+  const base = Math.atan2(dn, dx);
+  for (let i = 0; i < GLIDE_FAN.length; i++) {
+    const a = base + GLIDE_FAN[i];
+    const nx = pos.x + Math.cos(a) * speed;
+    const nn = pos.n + Math.sin(a) * speed;
+    if (!blockedFootprint(grid, nx, nn, r)) return { x: nx, n: nn };
+  }
+  return { x: pos.x, n: pos.n };
+}
+
 // Normalised movement direction from held keys (up = north, right = east).
 export function inputVector(keys) {
   let dx = 0;
@@ -141,6 +206,15 @@ export function facingFrom(dx, dn, prev) {
   if (dx === 0 && dn === 0) return prev;
   if (Math.abs(dx) > Math.abs(dn)) return dx > 0 ? 'right' : 'left';
   return dn > 0 ? 'up' : 'down';
+}
+
+// Travel speeds in metres per second. On foot the player walks or runs (Shift);
+// on the bicycle they cruise much faster and can still sprint, so crossing the
+// whole town takes a few seconds.
+export const TRAVEL = { walk: 4.6, run: 9.5, bike: 13, bikeSprint: 22 };
+export function travelSpeed({ bike, run } = {}) {
+  if (bike) return run ? TRAVEL.bikeSprint : TRAVEL.bike;
+  return run ? TRAVEL.run : TRAVEL.walk;
 }
 
 // Spiral out from a preferred point to the nearest spot clear of buildings and
