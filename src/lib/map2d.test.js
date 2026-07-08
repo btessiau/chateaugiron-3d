@@ -21,6 +21,7 @@ import {
   nearestPoint,
   classifyLandmark,
   buildingHeight,
+  barrierStyle,
   mapTargets,
   namedPlaces,
   nearestWithin,
@@ -345,6 +346,30 @@ describe('buildingHeight', () => {
     expect(buildingHeight({ building: 'house' })).toBe(3.2);
     expect(buildingHeight(null)).toBe(3.2);
     expect(buildingHeight({ building: 'house', height: '80' })).toBe(20);
+  });
+});
+
+describe('barrierStyle', () => {
+  it('draws rows of trees as a tall hedgerow', () => {
+    expect(barrierStyle({ natural: 'tree_row' })).toEqual({ kind: 'hedgerow', h: 3 });
+  });
+  it('makes the medieval city wall the tallest stone wall', () => {
+    expect(barrierStyle({ barrier: 'city_wall' })).toEqual({ kind: 'wall', h: 4.5 });
+  });
+  it('draws ordinary and retaining walls as low stone', () => {
+    expect(barrierStyle({ barrier: 'wall' })).toEqual({ kind: 'wall', h: 1.6 });
+    expect(barrierStyle({ barrier: 'retaining_wall' })).toEqual({ kind: 'wall', h: 1.6 });
+  });
+  it('draws hedges green and fences as low pickets', () => {
+    expect(barrierStyle({ barrier: 'hedge' })).toEqual({ kind: 'hedge', h: 1.3 });
+    expect(barrierStyle({ barrier: 'fence' })).toEqual({ kind: 'fence', h: 1 });
+    expect(barrierStyle({ barrier: 'handrail' })).toEqual({ kind: 'fence', h: 1 });
+  });
+  it('skips barriers that are not land borders', () => {
+    expect(barrierStyle({ barrier: 'kerb' })).toBeNull();
+    expect(barrierStyle({ barrier: 'bollard' })).toBeNull();
+    expect(barrierStyle({})).toBeNull();
+    expect(barrierStyle(null)).toBeNull();
   });
 });
 

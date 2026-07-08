@@ -9,6 +9,7 @@ import {
   ringCentroid,
   classifyLandmark,
   buildingHeight,
+  barrierStyle,
   roadLabelAnchor,
 } from '../lib/map2d.js';
 import { worldToMinimap, minimapScale } from '../lib/minimap.js';
@@ -45,6 +46,16 @@ const LAMP_GLOW = '#ffe0a0';
 const LAMP_GLOW_EDGE = '#e6b45a';
 const BENCH_TOP = '#bb8642';
 const BENCH_SH = '#8c5f2c';
+// Land borders between the houses: stone walls (and the medieval rampart),
+// clipped hedges, rows of trees, and low fences. Each is a little 2.5D ribbon.
+const WALL_TOP = '#cfc7ba';
+const WALL_FACE = '#a89f8f';
+const WALL_EDGE = '#7d7466';
+const HEDGE_TOP = '#79c265';
+const HEDGE_FACE = '#4f9a45';
+const HEDGE_EDGE = '#3c7d38';
+const FENCE_FACE = '#b08a5a';
+const FENCE_EDGE = '#7c5c34';
 // How tall a real metre draws, relative to the map scale. A touch under 1 keeps
 // the dense old town readable while still giving buildings real height.
 const VSCALE = 0.85;
@@ -96,6 +107,7 @@ export function prepareFeatures(features, project) {
   const waters = [];
   const roads = [];
   const buildings = [];
+  const barriers = [];
   const labels = [];
   const roadLabels = [];
   for (const f of features) {
@@ -121,6 +133,12 @@ export function prepareFeatures(features, project) {
       if (f.t && f.t.name) {
         const a = roadLabelAnchor(pts);
         if (a) roadLabels.push({ text: f.t.name, x: a.x, n: a.n, angle: a.angle, len: a.len });
+      }
+    } else if (f.k === 'barrier') {
+      const style = barrierStyle(f.t);
+      if (style && pts.length >= 2) {
+        // Sort key: the south-most point, so nearer borders overlap correctly.
+        barriers.push({ pts, bbox, style, sortN: minN });
       }
     } else if (f.k === 'building') {
       const lm = classifyLandmark(f.t);
@@ -148,7 +166,8 @@ export function prepareFeatures(features, project) {
     }
   }
   buildings.sort((a, b) => b.cn - a.cn); // north first, south drawn on top
-  return { greens, waters, roads, buildings, labels, roadLabels };
+  barriers.sort((a, b) => b.sortN - a.sortN);
+  return { greens, waters, roads, buildings, barriers, labels, roadLabels };
 }
 
 function inView(bbox, cam, hw, hh) {
@@ -326,6 +345,110 @@ export function drawProps(ctx, props, cam, W, H) {
   }
 }
 
+// Resolve the paint for a land-border kind.
+function barrierPaint(kind) {
+  if (kind === 'hedge' || kind === 'hedgerow') {
+    return { face: HEDGE_FACE, top: HEDGE_TOP, edge: HEDGE_EDGE, bumpy: true, thin: false };
+  }
+  if (kind === 'fence') {
+    return { face: FENCE_FACE, top: FENCE_FACE, edge: FENCE_EDGE, bumpy: false, thin: true };
+  }
+  return { face: WALL_FACE, top: WALL_TOP, edge: WALL_EDGE, bumpy: false, thin: false };
+}
+
+// One land-border ribbon: a ground shadow, a shaded vertical face rising
+// up-screen, and a lit crest. Hedges and tree rows get a bumpy green top; fences
+// are drawn as thin posts and a rail so they read as see-through.
+function drawBarrierRibbon(ctx, base, style, hpx, ppm) {
+  const n = base.length;
+  const paint = barrierPaint(style.kind);
+
+  // Ground shadow: the base path nudged down-right.
+  const sh = Math.min(1.5 + hpx * 0.14, 7);
+  ctx.strokeStyle = B_SHADOW;
+  ctx.lineWidth = Math.max(2, ppm * 0.5);
+  ctx.beginPath();
+  ctx.moveTo(base[0][0] + sh, base[0][1] + sh);
+  for (let i = 1; i < n; i++) ctx.lineTo(base[i][0] + sh, base[i][1] + sh);
+  ctx.stroke();
+
+  if (paint.thin) {
+    // Fence: vertical posts along the line plus a top rail.
+    ctx.strokeStyle = paint.edge;
+    ctx.lineWidth = Math.max(1, ppm * 0.16);
+    let acc = 0;
+    for (let i = 0; i < n; i++) {
+      if (i > 0) acc += Math.hypot(base[i][0] - base[i - 1][0], base[i][1] - base[i - 1][1]);
+      if (i === 0 || i === n - 1 || acc >= ppm * 1.6) {
+        acc = 0;
+        ctx.beginPath();
+        ctx.moveTo(base[i][0], base[i][1]);
+        ctx.lineTo(base[i][0], base[i][1] - hpx);
+        ctx.stroke();
+      }
+    }
+    ctx.strokeStyle = paint.face;
+    ctx.lineWidth = Math.max(1, ppm * 0.14);
+    ctx.beginPath();
+    ctx.moveTo(base[0][0], base[0][1] - hpx);
+    for (let i = 1; i < n; i++) ctx.lineTo(base[i][0], base[i][1] - hpx);
+    ctx.stroke();
+    return;
+  }
+
+  // Solid face: the strip between the base line and the crest line.
+  ctx.beginPath();
+  ctx.moveTo(base[0][0], base[0][1]);
+  for (let i = 1; i < n; i++) ctx.lineTo(base[i][0], base[i][1]);
+  for (let i = n - 1; i >= 0; i--) ctx.lineTo(base[i][0], base[i][1] - hpx);
+  ctx.closePath();
+  ctx.fillStyle = paint.face;
+  ctx.fill();
+  if (ppm > 3.5) {
+    ctx.strokeStyle = paint.edge;
+    ctx.lineWidth = Math.max(0.6, ppm * 0.08);
+    ctx.stroke();
+  }
+
+  if (paint.bumpy) {
+    // A bumpy green crest for hedges and rows of trees.
+    const r = Math.max(2.4, ppm * 0.55);
+    ctx.fillStyle = paint.top;
+    let acc = 0;
+    for (let i = 0; i < n; i++) {
+      if (i > 0) acc += Math.hypot(base[i][0] - base[i - 1][0], base[i][1] - base[i - 1][1]);
+      if (i === 0 || i === n - 1 || acc >= r * 1.5) {
+        acc = 0;
+        ctx.beginPath();
+        ctx.arc(base[i][0], base[i][1] - hpx, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  } else {
+    // A flat lit coping along the top of the wall.
+    ctx.strokeStyle = paint.top;
+    ctx.lineWidth = Math.max(1.4, ppm * 0.34);
+    ctx.beginPath();
+    ctx.moveTo(base[0][0], base[0][1] - hpx);
+    for (let i = 1; i < n; i++) ctx.lineTo(base[i][0], base[i][1] - hpx);
+    ctx.stroke();
+  }
+}
+
+// Draw the land borders in view (walls, hedges, tree rows, fences), nearer ones
+// last so they overlap correctly. Hidden when the map is zoomed far out.
+function drawBarriers(ctx, barriers, cam, hw, hh, sx, sy, ppm) {
+  if (!barriers || ppm < 3.5) return;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  for (const bar of barriers) {
+    if (!inView(bar.bbox, cam, hw, hh)) continue;
+    const hpx = bar.style.h * ppm * VSCALE;
+    const base = bar.pts.map((p) => [sx(p[0]), sy(p[1])]);
+    drawBarrierRibbon(ctx, base, bar.style, hpx, ppm);
+  }
+}
+
 // Draw the visible slice of the town, centred on the camera (in metres).
 export function drawWorld(ctx, prepared, cam, W, H, props) {
   const ppm = cam.ppm;
@@ -396,6 +519,9 @@ export function drawWorld(ctx, prepared, cam, W, H, props) {
 
   // Trees, lamps and benches sit on the ground, under the buildings.
   drawProps(ctx, props, cam, W, H);
+
+  // Land borders between the houses: walls, hedges, tree rows and fences.
+  drawBarriers(ctx, prepared.barriers, cam, hw, hh, sx, sy, ppm);
 
   // Street names, drawn on the road surface (under the buildings) when zoomed in.
   drawStreetLabels(ctx, prepared.roadLabels, cam, hw, hh, sx, sy, ppm);

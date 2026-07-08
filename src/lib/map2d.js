@@ -340,6 +340,21 @@ export function buildingHeight(tags) {
   return Math.max(2.5, Math.min(eaves + roofRise * 0.5, 20));
 }
 
+// How to draw a land-border feature (a barrier way or a row of trees) as a low
+// 2.5D ribbon: a draw kind and a height in metres. Returns null for barriers
+// that are not real land borders (kerbs, bollards, gates, car-park chains), so
+// they are skipped. The medieval city wall is deliberately the tallest.
+export function barrierStyle(tags) {
+  const b = (tags && tags.barrier) || '';
+  const nat = tags && tags.natural;
+  if (nat === 'tree_row') return { kind: 'hedgerow', h: 3 };
+  if (b === 'city_wall') return { kind: 'wall', h: 4.5 };
+  if (b === 'wall' || b === 'retaining_wall') return { kind: 'wall', h: 1.6 };
+  if (b === 'hedge') return { kind: 'hedge', h: 1.3 };
+  if (b === 'fence' || b === 'guard_rail' || b === 'handrail') return { kind: 'fence', h: 1 };
+  return null;
+}
+
 // Locate the real, navigable landmarks that actually exist in the data, as
 // jump/minimap targets {kind, label, x, n}. The church classifies by tag; the
 // château is the tallest historic building (the donjon); the étang and the
