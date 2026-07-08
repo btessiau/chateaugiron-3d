@@ -862,6 +862,16 @@ const LIT_ROADS = new Set([
   'tertiary_link',
 ]);
 
+// Roads that carry a few parked cars along the curb. Pedestrian ways and the
+// through primaries are left clear.
+const CAR_ROADS = new Set([
+  'secondary',
+  'tertiary',
+  'residential',
+  'unclassified',
+  'living_street',
+]);
+
 function lampGeoParts() {
   const pole = new THREE.CylinderGeometry(0.08, 0.13, 4.4, 6);
   pole.translate(0, 2.2, 0);
@@ -953,6 +963,104 @@ function buildChimneys(group, specs) {
   }
   mesh.instanceMatrix.needsUpdate = true;
   group.add(mesh);
+}
+
+// A few parked cars along the curbs, so the streets read as an inhabited town
+// rather than an empty model. Bodies, cabins and wheels are three instanced
+// meshes; per-car body colour comes from a muted real-world palette. Curb
+// points reuse the tested lampPointsAlong spacing math.
+const CAR_COLORS = [0xdfe1e3, 0xb8bdc2, 0x6b6f74, 0x24262b, 0x2a3b57, 0x6e2b2b, 0x9c8f77, 0x3a5c46];
+
+function carGeoParts() {
+  const body = new THREE.BoxGeometry(4.2, 0.72, 1.8);
+  body.translate(0, 0.69, 0); // wheels sit at y 0, body just above them
+  const cabin = new THREE.BoxGeometry(2.2, 0.52, 1.6);
+  cabin.translate(-0.15, 1.31, 0); // lower cabin toward the rear, on the body
+  const wheel = new THREE.CylinderGeometry(0.33, 0.33, 0.22, 12);
+  wheel.rotateZ(Math.PI / 2); // lay the axle across the car
+  return { body, cabin, wheel };
+}
+
+function buildCars(group, roadLines, groundY, opts = {}) {
+  const spacing = opts.spacing || 50;
+  const radius = opts.radius || 430;
+  const MAX = opts.max || 130;
+  const r2 = radius * radius;
+  const spots = [];
+  let ri = 0;
+  for (const rd of roadLines) {
+    if (spots.length >= MAX) break;
+    ri++;
+    if (!CAR_ROADS.has(rd.hw)) continue;
+    const side = ri % 2 === 0 ? 1 : -1; // alternate the parking side per road
+    const off = side * (roadWidth(rd.hw) / 2 - 0.9);
+    let idx = 0;
+    for (const s of lampPointsAlong(rd.pts, spacing, off)) {
+      idx++;
+      if (Math.abs((Math.sin((ri * 13.1 + idx) * 41.7) * 3271.7) % 1) < 0.42) continue; // leave gaps
+      if (s.x * s.x + s.z * s.z > r2) continue;
+      spots.push(s);
+      if (spots.length >= MAX) break;
+    }
+  }
+  if (!spots.length) return;
+
+  const { body, cabin, wheel } = carGeoParts();
+  const bodyMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.3 });
+  const cabinMat = new THREE.MeshStandardMaterial({
+    color: 0x121319,
+    roughness: 0.35,
+    metalness: 0.1,
+  });
+  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0e0e10, roughness: 0.85 });
+
+  const bodies = new THREE.InstancedMesh(body, bodyMat, spots.length);
+  const cabins = new THREE.InstancedMesh(cabin, cabinMat, spots.length);
+  const wheels = new THREE.InstancedMesh(wheel, wheelMat, spots.length * 4);
+  bodies.name = 'cars';
+  bodies.castShadow = true;
+  bodies.receiveShadow = true;
+  cabins.castShadow = true;
+  wheels.castShadow = true;
+
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const one = new THREE.Vector3(1, 1, 1);
+  const pos = new THREE.Vector3();
+  const col = new THREE.Color();
+  const wheelLocals = [
+    new THREE.Vector3(1.35, 0.33, 0.78),
+    new THREE.Vector3(1.35, 0.33, -0.78),
+    new THREE.Vector3(-1.35, 0.33, 0.78),
+    new THREE.Vector3(-1.35, 0.33, -0.78),
+  ];
+  const tmp = new THREE.Vector3();
+  for (let i = 0; i < spots.length; i++) {
+    const s = spots[i];
+    const gy = groundY(s.x, s.z);
+    q.setFromAxisAngle(up, s.angle);
+    pos.set(s.x, gy, s.z);
+    m.compose(pos, q, one);
+    bodies.setMatrixAt(i, m);
+    cabins.setMatrixAt(i, m);
+    col.setHex(
+      CAR_COLORS[Math.floor(Math.abs((Math.sin(i * 91.3) * 7219.1) % 1) * CAR_COLORS.length)],
+    );
+    bodies.setColorAt(i, col);
+    for (let w = 0; w < 4; w++) {
+      tmp.copy(wheelLocals[w]).applyQuaternion(q).add(pos);
+      m.compose(tmp, q, one);
+      wheels.setMatrixAt(i * 4 + w, m);
+    }
+  }
+  bodies.instanceMatrix.needsUpdate = true;
+  cabins.instanceMatrix.needsUpdate = true;
+  wheels.instanceMatrix.needsUpdate = true;
+  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
+  group.add(bodies);
+  group.add(cabins);
+  group.add(wheels);
 }
 
 export function addTreePoints(scene, points, proj, groundY) {
@@ -1273,6 +1381,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   buildGrass(group, grassPolys, groundY);
   buildLamps(group, roadLines, groundY);
   buildChimneys(group, chimneySpecs);
+  buildCars(group, roadLines, groundY);
   buildChateau(group, groundY, colliders, landmarks);
 
   return {
