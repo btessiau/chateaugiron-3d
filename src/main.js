@@ -13,7 +13,13 @@ import { makeProjector, metresToLatLon } from './lib/geo.js';
 import { makeHeightField } from './lib/terrain.js';
 import { buildGrid, collide } from './lib/collision.js';
 import { sunPosition } from './lib/sun.js';
-import { buildWorld, buildTerrain, buildGround, addTreePoints } from './render/world.js';
+import {
+  buildWorld,
+  buildTerrain,
+  buildGround,
+  addTreePoints,
+  windUniform,
+} from './render/world.js';
 import { Player } from './render/player.js';
 import { Avatar } from './render/avatar.js';
 import { Minimap } from './render/minimap.js';
@@ -486,6 +492,7 @@ function updateHud() {
 const clock = new THREE.Clock();
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.1);
+  windUniform.value += dt;
   if (player) player.update(dt);
   if (npcs) npcs.update(dt);
   if (birds) birds.update(dt);

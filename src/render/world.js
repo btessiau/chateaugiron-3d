@@ -22,6 +22,36 @@ import {
   doorwayGap,
 } from '../lib/geometry.js';
 
+// A single wind clock shared by every swaying material. main.js advances
+// `windUniform.value` by the frame delta each tick, so trees and grass lean on
+// the same breeze. Kept as one object so all injected shaders read one uniform.
+export const windUniform = { value: 0 };
+
+const glf = (x) => (Number.isInteger(x) ? x.toFixed(1) : String(x));
+
+// Inject a gentle vertex sway into a standard material. The displacement grows
+// with local height (so trunks and blade roots stay put), varies its phase by
+// instance world position, and is applied before the instance matrix so it
+// rotates naturally per instance. Only touches foliage and grass, which cast no
+// shadows, so no custom depth material is needed.
+function applyWind(mat, { speed = 1.1, amp = 0.3, href = 7.5 } = {}) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uWindTime = windUniform;
+    shader.vertexShader =
+      'uniform float uWindTime;\n' +
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        {
+          float wPhase = instanceMatrix[3].x * 0.12 + instanceMatrix[3].z * 0.12;
+          float hn = clamp(position.y / ${glf(href)}, 0.0, 1.0);
+          transformed.x += sin(uWindTime * ${glf(speed)} + wPhase) * hn * ${glf(amp)};
+          transformed.z += cos(uWindTime * ${glf(speed * 0.8)} + wPhase) * hn * ${glf(amp * 0.7)};
+        }`,
+      );
+  };
+}
+
 // Build one thin oriented wall box between two ground points [x, z].
 function wallBoxGeo(p0, p1, wallH, gy, th) {
   const dx = p1[0] - p0[0];
@@ -838,17 +868,15 @@ function instanceBillboardTrees(placements, groundY) {
   trunk.castShadow = true;
   trunk.receiveShadow = true;
 
-  const foliage = new THREE.InstancedMesh(
-    foliageGeo(),
-    new THREE.MeshStandardMaterial({
-      map: foliageTexture(),
-      alphaTest: 0.32,
-      side: THREE.DoubleSide,
-      roughness: 0.9,
-      metalness: 0,
-    }),
-    n,
-  );
+  const foliageMat = new THREE.MeshStandardMaterial({
+    map: foliageTexture(),
+    alphaTest: 0.32,
+    side: THREE.DoubleSide,
+    roughness: 0.9,
+    metalness: 0,
+  });
+  applyWind(foliageMat, { speed: 1.1, amp: 0.32, href: 7.5 });
+  const foliage = new THREE.InstancedMesh(foliageGeo(), foliageMat, n);
   // The aerial ground already carries baked canopy shadows, so the impostors do
   // not cast their own (which would show as crossed rectangles).
   foliage.castShadow = false;
@@ -954,17 +982,15 @@ function grassGeo() {
 function instanceGrass(placements, groundY) {
   if (!placements.length) return null;
   const n = placements.length;
-  const mesh = new THREE.InstancedMesh(
-    grassGeo(),
-    new THREE.MeshStandardMaterial({
-      map: grassTexture(),
-      alphaTest: 0.35,
-      side: THREE.DoubleSide,
-      roughness: 1,
-      metalness: 0,
-    }),
-    n,
-  );
+  const grassMat = new THREE.MeshStandardMaterial({
+    map: grassTexture(),
+    alphaTest: 0.35,
+    side: THREE.DoubleSide,
+    roughness: 1,
+    metalness: 0,
+  });
+  applyWind(grassMat, { speed: 1.6, amp: 0.14, href: 0.42 });
+  const mesh = new THREE.InstancedMesh(grassGeo(), grassMat, n);
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   const m = new THREE.Matrix4();
