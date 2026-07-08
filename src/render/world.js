@@ -133,6 +133,46 @@ function tiledTexture(name) {
   return tex;
 }
 
+// Lay a rectangular ground patch of triangles that follows the terrain. Center
+// (cx,cz) with unit axes (ux,uz) and (vx,vz); half is the half-extent on each
+// axis; the grid samples the true ground height at every vertex so the patch
+// hugs slopes. Emitted as raw x,y,z triples (both windings, so it shows from
+// above regardless of face side). Used for a paved parvis at the landmarks.
+function pushGroundPatch(
+  out,
+  cx,
+  cz,
+  ux,
+  uz,
+  vx,
+  vz,
+  halfU,
+  halfV,
+  groundY,
+  yOff,
+  nu = 10,
+  nv = 8,
+) {
+  const at = (s, t) => {
+    const x = cx + ux * s * halfU + vx * t * halfV;
+    const z = cz + uz * s * halfU + vz * t * halfV;
+    return [x, groundY(x, z) + yOff, z];
+  };
+  for (let i = 0; i < nu; i++) {
+    for (let j = 0; j < nv; j++) {
+      const s0 = -1 + (2 * i) / nu;
+      const s1 = -1 + (2 * (i + 1)) / nu;
+      const t0 = -1 + (2 * j) / nv;
+      const t1 = -1 + (2 * (j + 1)) / nv;
+      const a = at(s0, t0);
+      const b = at(s1, t0);
+      const c = at(s1, t1);
+      const d = at(s0, t1);
+      out.push(...a, ...c, ...b, ...a, ...d, ...c);
+    }
+  }
+}
+
 // A tiling window pattern drawn on a canvas. One window per tile; the building
 // material repeats it across facades in world units so windows are life sized.
 function makeFacadeTexture() {
@@ -1312,6 +1352,30 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     }
   }
 
+  // Paved aprons at the two landmarks the player walks to. OSM has no square or
+  // pedestrian-area polygons here, so the open forecourts would otherwise stay a
+  // blurry aerial smear at eye level. A cobbled parvis at the church door and a
+  // stone apron at the keep gate replace that near-field blur where the player
+  // actually stands and looks.
+  if (landmarks.church) {
+    const { cx, cz, ux, uz, vx, vz, L, W } = landmarks.church.box;
+    const depth = 5.0; // reaches out from the entrance
+    const px = cx + ux * -(L + depth);
+    const pz = cz + uz * -(L + depth);
+    pushGroundPatch(cobblePos, px, pz, ux, uz, vx, vz, depth, Math.min(W, 8), groundY, 0.07);
+  }
+  if (landmarks.keep) {
+    const { kx, kz, rWall, doorA } = landmarks.keep;
+    const ox = Math.cos(doorA);
+    const oz = Math.sin(doorA);
+    const depth = 5.0;
+    const gx = kx + ox * rWall;
+    const gz = kz + oz * rWall;
+    const cxp = gx + ox * depth;
+    const czp = gz + oz * depth;
+    pushGroundPatch(cobblePos, cxp, czp, ox, oz, -oz, ox, depth, 4.5, groundY, 0.07);
+  }
+
   const group = new THREE.Group();
 
   if (buildingGeos.length) {
@@ -1448,6 +1512,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       map: tiledTexture('cobblestone.jpg'),
       roughness: 0.95,
       metalness: 0,
+      side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
