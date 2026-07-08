@@ -974,6 +974,13 @@ const CAR_ROADS = new Set([
 const COBBLE_ROADS = new Set(['pedestrian', 'living_street', 'footway', 'path', 'steps']);
 const CORE = { x: -70, z: -120, r: 210 };
 
+// The tight medieval centre around the chateau-eglise axis. Small vehicular
+// lanes here (not the modern through-roads) were historically paved in stone,
+// so they get cobbles too. Chateaugiron is a labelled "Petite Cite de
+// Caractere" with a genuinely cobbled old town.
+const COBBLE_CORE_ROADS = new Set(['residential', 'service', 'unclassified']);
+const CORE_TIGHT = { x: -70, z: -120, r: 135 };
+
 function lampGeoParts() {
   const pole = new THREE.CylinderGeometry(0.08, 0.13, 4.4, 6);
   pole.translate(0, 2.2, 0);
@@ -1569,7 +1576,7 @@ function addRoad(pts, tags, outPos, outCol, groundY, cobbleOut) {
   const ribbon = buildRoadRibbon(pts, roadWidth(tags.highway), 0);
   if (!ribbon.length) return;
   // Cobble the historic-core paved ways; everything else stays asphalt.
-  if (cobbleOut && COBBLE_ROADS.has(tags.highway)) {
+  if (cobbleOut) {
     let sx = 0;
     let sz = 0;
     for (const p of pts) {
@@ -1578,7 +1585,13 @@ function addRoad(pts, tags, outPos, outCol, groundY, cobbleOut) {
     }
     const cx = sx / pts.length;
     const cz = sz / pts.length;
-    if ((cx - CORE.x) ** 2 + (cz - CORE.z) ** 2 <= CORE.r * CORE.r) {
+    const inCore = (cx - CORE.x) ** 2 + (cz - CORE.z) ** 2 <= CORE.r * CORE.r;
+    const inTight =
+      (cx - CORE_TIGHT.x) ** 2 + (cz - CORE_TIGHT.z) ** 2 <= CORE_TIGHT.r * CORE_TIGHT.r;
+    const cobble =
+      (COBBLE_ROADS.has(tags.highway) && inCore) ||
+      (COBBLE_CORE_ROADS.has(tags.highway) && inTight);
+    if (cobble) {
       for (let i = 0; i < ribbon.length; i += 3) {
         const x = ribbon[i];
         const z = ribbon[i + 2];
