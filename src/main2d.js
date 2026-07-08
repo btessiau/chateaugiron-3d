@@ -18,6 +18,7 @@ import {
 } from './lib/map2d.js';
 import { prepareFeatures, drawWorld } from './map2d/render2d.js';
 import { drawTrainer } from './map2d/sprite.js';
+import { treeSpots, lampSpots, benchSpots } from './lib/props2d.js';
 
 const WALK_SPEED = 4.6; // metres per second
 const RUN_SPEED = 9.5;
@@ -91,6 +92,22 @@ async function main() {
 
   const prepared = prepareFeatures(data.features, project);
 
+  // Little 2.5D props: real OSM trees, lamp posts along the streets, and a couple
+  // of benches in each park. Trees come from their own OSM extract.
+  let treePts = [];
+  try {
+    const tr = await fetch(`${import.meta.env.BASE_URL}data/trees.json`);
+    const td = await tr.json();
+    treePts = td.trees || [];
+  } catch {
+    treePts = [];
+  }
+  const props = {
+    trees: treeSpots(treePts, project),
+    lamps: lampSpots(prepared.roads),
+    benches: benchSpots(data.features, project),
+  };
+
   // Collision grid: buildings and water block, everything else is walkable.
   const bounds = featureBounds(data.features, project);
   const grid = makeGrid(bounds, 1);
@@ -140,6 +157,23 @@ async function main() {
   let strideAcc = 0;
   let posTimer = 0;
 
+  // Small debug hook (mirrors the 3D game's window.__game) so headless probes
+  // can jump the camera and read the player position.
+  if (typeof window !== 'undefined') {
+    window.__map2d = {
+      get pos() {
+        return { x: player.x, n: player.n };
+      },
+      setPos(x, n) {
+        player.x = x;
+        player.n = n;
+      },
+      setZoom(z) {
+        zoom = z;
+      },
+    };
+  }
+
   let last = performance.now();
   function frameLoop(now) {
     const dt = Math.min((now - last) / 1000, 0.05);
@@ -165,7 +199,7 @@ async function main() {
     }
 
     const cam = { x: player.x, n: player.n, ppm: zoom };
-    drawWorld(ctx, prepared, cam, W, H);
+    drawWorld(ctx, prepared, cam, W, H, props);
     drawTrainer(ctx, W / 2, H / 2 + 8, facing, frame, SPRITE_UNIT);
 
     posTimer += dt;

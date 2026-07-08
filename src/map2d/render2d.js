@@ -26,6 +26,18 @@ const DOOR = '#6f4d33';
 const DOOR_EDGE = '#47301d';
 const WIN_GLASS = '#cfe6f4';
 const WIN_EDGE = '#8b7a5f';
+// Little 2.5D props on the greens and kerbs.
+const PROP_SHADOW = 'rgba(40,30,22,0.18)';
+const TREE_TRUNK = '#8a6a45';
+const TREE_LEAF = '#6cc05a';
+const TREE_LEAF_SH = '#54a848';
+const TREE_LEAF_HI = '#8bd472';
+const TREE_LEAF_EDGE = 'rgba(60,95,45,0.5)';
+const LAMP_POST = '#5f656e';
+const LAMP_GLOW = '#ffe0a0';
+const LAMP_GLOW_EDGE = '#e6b45a';
+const BENCH_TOP = '#bb8642';
+const BENCH_SH = '#8c5f2c';
 // How tall a real metre draws, relative to the map scale. A touch under 1 keeps
 // the dense old town readable while still giving buildings real height.
 const VSCALE = 0.85;
@@ -192,8 +204,118 @@ function drawFacadeDetail(ctx, f, hpx) {
   }
 }
 
+// A round toy tree: ground shadow, short trunk, layered canopy raised up-screen.
+function drawTree(ctx, px, py, ppm) {
+  const h = 4.5 * ppm * VSCALE;
+  const r = Math.max(3.5, 1.7 * ppm);
+  ctx.fillStyle = PROP_SHADOW;
+  ctx.beginPath();
+  ctx.ellipse(px + h * 0.18, py + 1.5, r * 0.95, r * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = TREE_TRUNK;
+  ctx.lineWidth = Math.max(1.4, ppm * 0.28);
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(px, py - h);
+  ctx.stroke();
+  const cy = py - h;
+  ctx.fillStyle = TREE_LEAF_SH;
+  ctx.beginPath();
+  ctx.arc(px, cy + r * 0.3, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = TREE_LEAF;
+  ctx.beginPath();
+  ctx.arc(px, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = TREE_LEAF_HI;
+  ctx.beginPath();
+  ctx.arc(px - r * 0.33, cy - r * 0.33, r * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = TREE_LEAF_EDGE;
+  ctx.lineWidth = Math.max(0.8, ppm * 0.1);
+  ctx.beginPath();
+  ctx.arc(px, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+// A lantern lamp post: shadow, thin post, warm glowing head.
+function drawLamp(ctx, px, py, ppm) {
+  const h = 4.2 * ppm * VSCALE;
+  ctx.fillStyle = PROP_SHADOW;
+  ctx.beginPath();
+  ctx.ellipse(
+    px + h * 0.16,
+    py + 1.5,
+    Math.max(3, ppm * 0.55),
+    Math.max(1.4, ppm * 0.26),
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.strokeStyle = LAMP_POST;
+  ctx.lineWidth = Math.max(1.2, ppm * 0.16);
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(px, py - h);
+  ctx.stroke();
+  const r = Math.max(2.2, ppm * 0.42);
+  ctx.fillStyle = LAMP_GLOW;
+  ctx.beginPath();
+  ctx.arc(px, py - h, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = LAMP_GLOW_EDGE;
+  ctx.lineWidth = Math.max(0.8, ppm * 0.12);
+  ctx.stroke();
+}
+
+// A park bench: shadow, a raised seat slab and a thin backrest behind it.
+function drawBench(ctx, px, py, ppm) {
+  const w = Math.max(6, 1.8 * ppm);
+  const d = Math.max(2.4, 0.55 * ppm);
+  const h = 0.8 * ppm * VSCALE;
+  ctx.fillStyle = PROP_SHADOW;
+  ctx.beginPath();
+  ctx.ellipse(px, py + 1, w * 0.6, d * 0.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = BENCH_SH;
+  ctx.fillRect(px - w / 2, py - h - d * 1.4, w, d * 0.7); // backrest
+  ctx.fillStyle = BENCH_TOP;
+  ctx.fillRect(px - w / 2, py - h - d * 0.5, w, d); // seat
+}
+
+// Draw the trees, lamps and benches in view, north-to-south so nearer ones
+// overlap correctly. Detail is layered on with zoom so the far view stays clean.
+export function drawProps(ctx, props, cam, W, H) {
+  const ppm = cam.ppm;
+  if (!props || ppm < 3.5) return;
+  const sx = (x) => (x - cam.x) * ppm + W / 2;
+  const sy = (n) => (cam.n - n) * ppm + H / 2;
+  const hw = W / (2 * ppm) + 20;
+  const hh = H / (2 * ppm) + 20;
+  const vis = (x, n) => !(x < cam.x - hw || x > cam.x + hw || n < cam.n - hh || n > cam.n + hh);
+
+  const items = [];
+  for (const t of props.trees) if (vis(t.x, t.n)) items.push({ k: 0, x: t.x, n: t.n });
+  if (ppm >= 5)
+    for (const l of props.lamps) if (vis(l.x, l.n)) items.push({ k: 1, x: l.x, n: l.n });
+  if (ppm >= 6)
+    for (const b of props.benches) if (vis(b.x, b.n)) items.push({ k: 2, x: b.x, n: b.n });
+  items.sort((a, b) => b.n - a.n);
+
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  for (const it of items) {
+    const px = sx(it.x);
+    const py = sy(it.n);
+    if (it.k === 0) drawTree(ctx, px, py, ppm);
+    else if (it.k === 1) drawLamp(ctx, px, py, ppm);
+    else drawBench(ctx, px, py, ppm);
+  }
+}
+
 // Draw the visible slice of the town, centred on the camera (in metres).
-export function drawWorld(ctx, prepared, cam, W, H) {
+export function drawWorld(ctx, prepared, cam, W, H, props) {
   const ppm = cam.ppm;
   const sx = (x) => (x - cam.x) * ppm + W / 2;
   const sy = (n) => (cam.n - n) * ppm + H / 2;
@@ -259,6 +381,9 @@ export function drawWorld(ctx, prepared, cam, W, H) {
       ctx.stroke();
     }
   }
+
+  // Trees, lamps and benches sit on the ground, under the buildings.
+  drawProps(ctx, props, cam, W, H);
 
   // Buildings as 2.5D blocks: a height-scaled ground shadow, cream facade walls
   // that rise up-screen (south face lit, other faces shaded), a door and windows
