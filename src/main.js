@@ -18,6 +18,7 @@ import { addLandmarkPhotos } from './render/landmarkPhotos.js';
 import { nearestIndex } from './lib/nearest.js';
 import { Ambience } from './render/ambience.js';
 import { buildNPCs } from './render/npcs.js';
+import { buildBirds } from './render/birds.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay');
@@ -110,8 +111,13 @@ scene.add(fill);
 let player = null;
 let avatar = null;
 let npcs = null;
+let birds = null;
 let water = null;
 let waterNormals = null;
+
+// A few birds circling over the old town, for a little life in the sky.
+birds = buildBirds();
+scene.add(birds.group);
 
 let data = null;
 let ready = false;
@@ -406,6 +412,7 @@ function tick() {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (player) player.update(dt);
   if (npcs) npcs.update(dt);
+  if (birds) birds.update(dt);
   if (waterNormals) {
     waterNormals.offset.x += dt * 0.012;
     waterNormals.offset.y += dt * 0.009;
