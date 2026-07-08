@@ -8,6 +8,7 @@ import { buildingHeight, baseHeight } from '../lib/osm.js';
 import { pickSpawn } from '../lib/spawn.js';
 import { orientedBox, gableRoofPositions } from '../lib/roof.js';
 import { scatterInPolygon } from '../lib/scatter.js';
+import { lampPointsAlong } from '../lib/streetlamps.js';
 import { isChurch, isChapel, towerPlacement, pyramidPositions } from '../lib/landmark.js';
 import {
   roadWidth,
@@ -843,7 +844,83 @@ function buildGrass(group, grassPolys, groundY, radius = 320) {
   if (mesh) group.add(mesh);
 }
 
-// Instance individual mapped trees from projected [lon, lat] points.
+// Street lamps: a dark metal post with a warm lantern, instanced along the
+// larger roads near the town core. Purely decorative vertical street furniture
+// so the streets read less bare; the lantern glass has a faint emissive glow so
+// it still reads at midday.
+const LIT_ROADS = new Set([
+  'primary',
+  'secondary',
+  'tertiary',
+  'residential',
+  'unclassified',
+  'living_street',
+  'pedestrian',
+  'primary_link',
+  'secondary_link',
+  'tertiary_link',
+]);
+
+function lampGeoParts() {
+  const pole = new THREE.CylinderGeometry(0.08, 0.13, 4.4, 6);
+  pole.translate(0, 2.2, 0);
+  const lantern = new THREE.BoxGeometry(0.32, 0.46, 0.32);
+  lantern.translate(0, 4.55, 0);
+  return { pole, lantern };
+}
+
+function buildLamps(group, roadLines, groundY, opts = {}) {
+  const spacing = opts.spacing || 38;
+  const radius = opts.radius || 560;
+  const MAX = opts.max || 620;
+  const r2 = radius * radius;
+  const pts = [];
+  for (const rd of roadLines) {
+    if (pts.length >= MAX) break;
+    if (!LIT_ROADS.has(rd.hw)) continue;
+    const off = roadWidth(rd.hw) / 2 + 1.3;
+    for (const l of lampPointsAlong(rd.pts, spacing, off)) {
+      if (l.x * l.x + l.z * l.z > r2) continue;
+      pts.push(l);
+      if (pts.length >= MAX) break;
+    }
+  }
+  if (!pts.length) return;
+  const { pole, lantern } = lampGeoParts();
+  const poleMat = new THREE.MeshStandardMaterial({
+    color: 0x2a2a30,
+    roughness: 0.6,
+    metalness: 0.5,
+  });
+  const lanternMat = new THREE.MeshStandardMaterial({
+    color: 0xffe6b0,
+    emissive: 0xffcf7a,
+    emissiveIntensity: 0.9,
+    roughness: 0.5,
+  });
+  const poles = new THREE.InstancedMesh(pole, poleMat, pts.length);
+  const lanterns = new THREE.InstancedMesh(lantern, lanternMat, pts.length);
+  poles.castShadow = true;
+  poles.receiveShadow = false;
+  lanterns.castShadow = false;
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const one = new THREE.Vector3(1, 1, 1);
+  const pos = new THREE.Vector3();
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    q.setFromAxisAngle(up, p.angle);
+    pos.set(p.x, groundY(p.x, p.z), p.z);
+    m.compose(pos, q, one);
+    poles.setMatrixAt(i, m);
+    lanterns.setMatrixAt(i, m);
+  }
+  poles.instanceMatrix.needsUpdate = true;
+  lanterns.instanceMatrix.needsUpdate = true;
+  group.add(poles);
+  group.add(lanterns);
+}
 export function addTreePoints(scene, points, proj, groundY) {
   const placements = points.map((ll, i) => {
     const [x, z] = proj.project(ll[0], ll[1]);
@@ -892,6 +969,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const colliders = [];
   const woods = [];
   const grassPolys = [];
+  const roadLines = [];
   const landmarks = { church: null, keep: null, oldtown: [] };
 
   // A few real old-town buildings get their street front skinned with a
@@ -1027,6 +1105,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       greenGeos.push(geo);
     } else if (f.k === 'road') {
       addRoad(pts, f.t, roadPos, roadCol, groundY);
+      roadLines.push({ pts, hw: f.t.highway });
     }
   }
 
@@ -1147,6 +1226,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
 
   buildTrees(group, woods, groundY);
   buildGrass(group, grassPolys, groundY);
+  buildLamps(group, roadLines, groundY);
   buildChateau(group, groundY, colliders, landmarks);
 
   return {
