@@ -77,7 +77,7 @@ const scene = new THREE.Scene();
 // The town is small and dense, so the horizon is pulled in with haze. You see a
 // believable few hundred metres and the landmarks nearby, not the whole 3.4 km
 // map and the fields beyond, the way you cannot see across a real town.
-scene.fog = new THREE.Fog(0xc3d3e6, 140, 520);
+scene.fog = new THREE.Fog(0xcbd2d6, 140, 520);
 
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 4000);
 
@@ -121,7 +121,7 @@ scene.add(sun.target);
 // Soft sky fill from the shaded side so north faces and foliage undersides do
 // not read as black. No shadows and low intensity, so it lifts the dark sides
 // without flattening the sunlit look.
-const fill = new THREE.DirectionalLight(0xaec6ea, 0.5);
+const fill = new THREE.DirectionalLight(0xaec6ea, 0.66);
 fill.position.set(-sunDir.x * 600, 420, -sunDir.z * 600);
 scene.add(fill);
 
@@ -160,13 +160,16 @@ const bloom = new UnrealBloomPass(
 );
 composer.addPass(bloom);
 
-// A restrained photographic grade: a touch more colour, and a soft vignette
-// that draws the eye to the centre the way a real lens falls off at the edges.
-// Kept subtle so it reads as a camera, not a filter.
+// A restrained photographic grade: a warm sunlit white balance, a little more
+// colour and contrast so the town stops looking hazy and flat, and a soft
+// vignette that draws the eye to the centre the way a real lens falls off at
+// the edges. Kept subtle so it reads as a camera, not a filter.
 const GradeShader = {
   uniforms: {
     tDiffuse: { value: null },
-    uSaturation: { value: 1.08 },
+    uSaturation: { value: 1.14 },
+    uContrast: { value: 1.07 },
+    uWarm: { value: new THREE.Vector3(1.035, 1.0, 0.955) },
     uVignette: { value: 0.82 },
   },
   vertexShader: `
@@ -178,14 +181,19 @@ const GradeShader = {
   fragmentShader: `
     uniform sampler2D tDiffuse;
     uniform float uSaturation;
+    uniform float uContrast;
+    uniform vec3 uWarm;
     uniform float uVignette;
     varying vec2 vUv;
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
+      c.rgb *= uWarm;
       float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(vec3(l), c.rgb, uSaturation);
+      c.rgb = (c.rgb - 0.5) * uContrast + 0.5;
       float d = length(vUv - 0.5);
       c.rgb *= mix(1.0, uVignette, smoothstep(0.35, 0.85, d));
+      c.rgb = clamp(c.rgb, 0.0, 1.0);
       gl_FragColor = c;
     }`,
 };
