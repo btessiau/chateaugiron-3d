@@ -262,6 +262,32 @@ export function nearestPoint(points, tx, tn) {
   return best ? { x: best[0], n: best[1], d: Math.sqrt(bestD) } : null;
 }
 
+// Best place to draw a road's name: the midpoint of its longest straight
+// segment, with that segment's world-space angle so the text can run along the
+// road. Returns null for a degenerate way. len is the segment length in metres,
+// used by the renderer to skip labels that are too short on screen to read.
+export function roadLabelAnchor(pts) {
+  if (!pts || pts.length < 2) return null;
+  let best = -1;
+  let x = 0;
+  let n = 0;
+  let angle = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const ax = pts[i][0];
+    const an = pts[i][1];
+    const bx = pts[i + 1][0];
+    const bn = pts[i + 1][1];
+    const len = Math.hypot(bx - ax, bn - an);
+    if (len > best) {
+      best = len;
+      x = (ax + bx) / 2;
+      n = (an + bn) / 2;
+      angle = Math.atan2(bn - an, bx - ax);
+    }
+  }
+  return { x, n, angle, len: best };
+}
+
 // Tag a named feature as one of the town's landmarks so it can be coloured and
 // labelled for easy navigation.
 export function classifyLandmark(tags) {

@@ -4,7 +4,13 @@
 // North is up and east is to the right, so it matches a real map (not mirrored).
 
 import { roadWidth } from '../lib/geometry.js';
-import { isWalkableWay, ringCentroid, classifyLandmark, buildingHeight } from '../lib/map2d.js';
+import {
+  isWalkableWay,
+  ringCentroid,
+  classifyLandmark,
+  buildingHeight,
+  roadLabelAnchor,
+} from '../lib/map2d.js';
 import { worldToMinimap, minimapScale } from '../lib/minimap.js';
 
 const GRASS = '#8ccf77';
@@ -91,6 +97,7 @@ export function prepareFeatures(features, project) {
   const roads = [];
   const buildings = [];
   const labels = [];
+  const roadLabels = [];
   for (const f of features) {
     const pts = f.g.map((p) => project(p[0], p[1]));
     let minX = Infinity;
@@ -111,6 +118,10 @@ export function prepareFeatures(features, project) {
     } else if (f.k === 'road') {
       const hw = f.t && f.t.highway;
       roads.push({ pts, bbox, walk: isWalkableWay(hw), w: roadWidth(hw) });
+      if (f.t && f.t.name) {
+        const a = roadLabelAnchor(pts);
+        if (a) roadLabels.push({ text: f.t.name, x: a.x, n: a.n, angle: a.angle, len: a.len });
+      }
     } else if (f.k === 'building') {
       const lm = classifyLandmark(f.t);
       const style = lm ? LANDMARK_STYLE[lm] : null;
@@ -137,7 +148,7 @@ export function prepareFeatures(features, project) {
     }
   }
   buildings.sort((a, b) => b.cn - a.cn); // north first, south drawn on top
-  return { greens, waters, roads, buildings, labels };
+  return { greens, waters, roads, buildings, labels, roadLabels };
 }
 
 function inView(bbox, cam, hw, hh) {
@@ -386,6 +397,9 @@ export function drawWorld(ctx, prepared, cam, W, H, props) {
   // Trees, lamps and benches sit on the ground, under the buildings.
   drawProps(ctx, props, cam, W, H);
 
+  // Street names, drawn on the road surface (under the buildings) when zoomed in.
+  drawStreetLabels(ctx, prepared.roadLabels, cam, hw, hh, sx, sy, ppm);
+
   // Buildings as 2.5D blocks: a height-scaled ground shadow, cream facade walls
   // that rise up-screen (south face lit, other faces shaded), a door and windows
   // on the front, then the coloured roof on top. Sorted north-to-south so nearer
@@ -499,6 +513,47 @@ function drawLabels(ctx, labels, cam, hw, hh, sx, sy, ppm) {
     ctx.strokeText(l.text, px, py - (big ? 14 : 0));
     ctx.fillStyle = big ? '#2a2320' : '#4a423a';
     ctx.fillText(l.text, px, py - (big ? 14 : 0));
+  }
+}
+
+// Street names run along the road surface when zoomed in. Each name is drawn
+// rotated to match its road, kept upright, with a soft white halo. Names are
+// de-duplicated on screen so a street split into many OSM ways is not repeated
+// every few metres.
+function drawStreetLabels(ctx, roadLabels, cam, hw, hh, sx, sy, ppm) {
+  if (!roadLabels || ppm < 5) return;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '600 10px system-ui, sans-serif';
+  const placed = [];
+  for (const l of roadLabels) {
+    if (l.x < cam.x - hw || l.x > cam.x + hw || l.n < cam.n - hh || l.n > cam.n + hh) continue;
+    if (l.len * ppm < 70) continue; // too short on screen to read
+    const px = sx(l.x);
+    const py = sy(l.n);
+    // Skip if the same name was already drawn nearby this frame.
+    let dupe = false;
+    for (const p of placed) {
+      if (p.text === l.text && Math.hypot(p.px - px, p.py - py) < 240) {
+        dupe = true;
+        break;
+      }
+    }
+    if (dupe) continue;
+    placed.push({ text: l.text, px, py });
+    // North is up (sy flips n), so the screen angle is the negated world angle.
+    let a = -l.angle;
+    if (a > Math.PI / 2) a -= Math.PI;
+    if (a < -Math.PI / 2) a += Math.PI;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(a);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.strokeText(l.text, 0, 0);
+    ctx.fillStyle = '#5a5148';
+    ctx.fillText(l.text, 0, 0);
+    ctx.restore();
   }
 }
 

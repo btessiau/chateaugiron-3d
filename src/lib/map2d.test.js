@@ -17,6 +17,7 @@ import {
   TRAVEL,
   findOpenSpawn,
   ringCentroid,
+  roadLabelAnchor,
   nearestPoint,
   classifyLandmark,
   buildingHeight,
@@ -251,6 +252,26 @@ describe('ringCentroid', () => {
         [0, 4],
       ]),
     ).toEqual({ x: 2, n: 2 });
+  });
+});
+
+describe('roadLabelAnchor', () => {
+  it('returns null for a degenerate way', () => {
+    expect(roadLabelAnchor([])).toBe(null);
+    expect(roadLabelAnchor([[1, 1]])).toBe(null);
+    expect(roadLabelAnchor(undefined)).toBe(null);
+  });
+  it('picks the midpoint and angle of the longest segment', () => {
+    // Short east step, then a long north-east run.
+    const a = roadLabelAnchor([
+      [0, 0],
+      [1, 0],
+      [11, 10],
+    ]);
+    expect(a.x).toBeCloseTo(6);
+    expect(a.n).toBeCloseTo(5);
+    expect(a.angle).toBeCloseTo(Math.PI / 4);
+    expect(a.len).toBeCloseTo(Math.hypot(10, 10));
   });
 });
 
