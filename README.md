@@ -1,19 +1,23 @@
 # Châteaugiron 3D
 
-Walk the real town of [Châteaugiron](https://en.wikipedia.org/wiki/Ch%C3%A2teaugiron) (Brittany, France) at true 1:1 scale, in your browser. This is **V0**: the whole historic core built automatically from free OpenStreetMap data and rendered with three.js.
+Walk the real town of [Châteaugiron](https://en.wikipedia.org/wiki/Ch%C3%A2teaugiron) (Brittany, France) at true 1:1 scale, in your browser. The whole historic core is built automatically from free open data and rendered with three.js: real terrain relief, real slate and granite textures, pitched roofs, a walkable character in first or third person, and two landmarks you can step inside.
 
 ![Châteaugiron skyline rendered in the browser](docs/preview.png)
 
 **Live demo:** https://btessiau.github.io/chateaugiron-3d/
 
-## What V0 does
+## What it does
 
-- Loads real map data around the medieval château (5,000+ buildings, roads, the étang, green spaces).
-- Extrudes every building to its real height (from OSM `height` or `building:levels`).
-- Projects everything to metres on a plane centred on the château, so distances are real 1:1.
-- Lets you walk it in first person with sun, shadows, sky and fog.
+- Builds the medieval core from real map data: 5,000+ buildings, roads, the étang, green spaces, each building at its real height and position, projected to metres so distances are true 1:1.
+- Drapes everything over real ground relief from IGN elevation, so the streets rise and fall the way the real town does.
+- Skins the world with real CC0 photo textures: slate roofs, granite castle walls, cobblestone lanes, plus a real aerial photo on the ground.
+- Gives buildings pitched slate roofs, stone chimneys, and lit windows, with a Breton palette.
+- Lets you walk it in first or third person with a real human character, run, jump, sun, shadows, sky and reflective water.
+- Two landmarks are enterable: the church of Sainte-Marie-Madeleine (stone nave, pews, altar, stained glass) and the château keep (spiral stair, arrow slits). Both hold real photos from Wikimedia Commons.
+- Fills the streets with life: trees, grass, townsfolk, parked cars, street lamps, birds, and an ambient sound bed.
+- Shows real street photographs in place (press `P`) from Panoramax, plus a minimap and compass.
 
-Everything renders from one committed data file, so it runs offline after `npm install`.
+Everything renders from committed data files, so it runs offline after `npm install`.
 
 ## Quick start
 
@@ -24,12 +28,16 @@ npm run dev
 
 Open the printed local URL, click **Enter Châteaugiron**, then:
 
-| Key             | Action            |
-| --------------- | ----------------- |
-| `W` `A` `S` `D` | Move              |
-| Mouse           | Look              |
-| `Shift`         | Run               |
-| `Esc`           | Release the mouse |
+| Key             | Action               |
+| --------------- | -------------------- |
+| `W` `A` `S` `D` | Move                 |
+| Mouse           | Look                 |
+| `Shift`         | Run                  |
+| `Space`         | Jump                 |
+| `V`             | First / third person |
+| `P`             | Real photo here      |
+| `M`             | Sound on / off       |
+| `Esc`           | Release the mouse    |
 
 To rebuild the map data (for example a larger radius):
 
@@ -40,27 +48,31 @@ npm run fetch-data 2500   # radius in metres around the château
 ## How it works
 
 ```
-OpenStreetMap (Overpass API)
-        |  scripts/fetch-osm.mjs   (uses src/lib/osm.js)
+OpenStreetMap (Overpass)          IGN Géoplateforme (elevation, ortho)
+        |  scripts/fetch-osm.mjs           |  scripts/fetch-elevation.mjs
+        v                                  v
+   public/data/*.json               heightfield + aerial photo
+        |
+        |  src/lib/*   pure maths, no three.js, unit tested to 100%
+        |     geo.js        lon/lat  ->  metres (1:1)
+        |     osm.js        tags, building height, feature class
+        |     geometry.js   road ribbons, rings, bounds, doorways
+        |     terrain.js    smooth heightfield sampling
+        |     roof.js       oriented pitched roof from a footprint
+        |     camera.js     first / third person camera maths
+        |     collision.js  circle vs building push-out
+        |     scatter.js    tree and grass placement
+        |     sun.js  landmark.js  minimap.js  chimney.js  streetlamps.js  skin.js ...
         v
-public/data/chateaugiron.json   (buildings, roads, water, green)
-        |  src/lib/geo.js       lon/lat  ->  metres (1:1)
-        |  src/lib/geometry.js  road ribbons, ring + bounds maths
-        |  src/lib/spawn.js     pick an open spawn point
-        |  src/render/world.js  extrude buildings, water, greens (three.js)
-        |  src/render/controls.js  first-person walk
+   src/render/*   three.js mesh building, player, HUD
         v
    three.js scene in the browser (src/main.js)
 ```
 
-- `scripts/fetch-osm.mjs` queries the Overpass API and writes a trimmed JSON.
-- `src/lib/` holds all pure maths, with no three.js, unit tested to 100%.
-  - `geo.js` converts longitude and latitude to local metres, +X east, +Z north.
-  - `osm.js` reads OSM tags (building height, feature class).
-  - `geometry.js` builds road ribbons and footprint bounds.
-  - `spawn.js` picks an open spot to start.
-- `src/render/` holds the three.js glue: mesh building and the walk controller.
-- `src/main.js` sets up the renderer, sun, shadows, sky, the HUD and the loop.
+- `scripts/` fetches and trims the open data into committed JSON, so the app runs offline.
+- `src/lib/` holds all pure, deterministic maths, with no three.js, unit tested to 100%.
+- `src/render/` holds the three.js glue: world building, the character and the walk controller.
+- `src/main.js` sets up the renderer, sun, shadows, sky, water, the HUD and the loop.
 
 ## Engineering
 
@@ -79,19 +91,23 @@ npm run build      # production build
 npm run smoke      # headless render check (needs Chrome + puppeteer-core)
 ```
 
-## Scope and roadmap
+## How it was built, layer by layer
 
-V0 is the fast, free base layer. The town stays complete and playable while fidelity rises layer by layer. All sources are free and open.
+The town stays complete and playable while fidelity rises layer by layer. Every layer is unit tested where it is pure logic, screenshot verified where it is rendering, then committed and auto-deployed. All sources are free and open.
 
-- **A. Engineering foundation (done):** ESLint, Prettier, Vitest at 100% on `src/lib`, Husky pre-commit, CI, GitHub Pages deploy.
-- **B. Terrain relief:** real elevation from the [IGN Géoplateforme altimetry API](https://geoservices.ign.fr) (RGE ALTI / LiDAR HD, Etalab licence), draping ground and buildings onto real height.
-- **C. Building realism:** pitched roofs, facade textures with window rows, roof materials. Tiling CC0 PBR from [ambientCG](https://ambientcg.com); real roofs from [IGN ortho](https://geoservices.ign.fr) aerial imagery.
-- **D. Nature and materials:** instanced trees, sky dome, water shader, tone mapping.
-- **E. Character and third person:** rigged glTF avatar with a first and third person toggle.
-- **F. Collision and physics:** capsule collision against buildings, ground clamp, jump.
-- **G. Interiors:** OSM indoor data where present, plus authored interiors for the château, church and mairie. Landmark reference photos from [Wikimedia Commons](https://commons.wikimedia.org) and street level imagery from [Panoramax](https://panoramax.fr) (open, CC-BY-SA / Etalab).
-- **H. Game polish:** minimap, day cycle, loading screen, performance work.
-- **I. Final:** validate the live Pages URL and write the report.
+- **A. Engineering foundation:** ESLint, Prettier, Vitest at 100% on `src/lib`, Husky pre-commit, CI, GitHub Pages deploy.
+- **B. Terrain relief:** real elevation from the [IGN Géoplateforme altimetry API](https://geoservices.ign.fr) (RGE ALTI / LiDAR HD, Etalab licence), draping ground, buildings and roads onto real height.
+- **C. Building realism:** pitched slate roofs, stone chimneys, a facade window shader, and a real [IGN ortho](https://geoservices.ign.fr) aerial photo on the ground.
+- **D. Nature and materials:** instanced billboard trees, grass ground cover, a physical sky and sun, reflective water, tone mapping and fog.
+- **E. Character and third person:** a CC0 rigged human (Quaternius) with idle, walk and run, and a first or third person toggle.
+- **F. Collision and physics:** circle against building collision on a spatial grid, ground clamp to the terrain, jump.
+- **G. Interiors:** authored interiors for the church and the château keep, with real landmark photos from [Wikimedia Commons](https://commons.wikimedia.org) and street level imagery from [Panoramax](https://panoramax.fr) (open, CC-BY-SA / Etalab).
+- **H. Game polish:** minimap and compass, street lamps, parked cars, townsfolk, birds, an ambient sound bed, and real CC0 PBR textures (slate, granite, cobblestone) from [ambientCG](https://ambientcg.com) and [Poly Haven](https://polyhaven.com).
+- **I. Live:** the Pages URL is headless rendered and checked for zero runtime errors on every deploy.
+
+### The realism ceiling, honestly
+
+This is as real as free data allows, not a survey grade digital twin. The ground is a free aerial photo at about 0.85 m per pixel, so away from the paved focal points it is soft up close. Building fronts are extruded from footprints, so they are flat boxes with textured walls, not modelled facades. There is no free source of straight on photos for every house, so real photos appear where they exist (the two landmarks, a few frontages, the street level markers), not on every wall.
 
 ## Data and licence
 
