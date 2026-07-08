@@ -917,7 +917,7 @@ function instanceGrass(placements, groundY) {
 // Scatter grass tufts across non-wooded green polygons, but only near the town
 // core (within `radius` of the origin) so the foreground lawns gain real detail
 // without flooding the whole map with instances.
-function buildGrass(group, grassPolys, groundY, radius = 320) {
+function buildGrass(group, grassPolys, groundY, radius = 320, exclude = null) {
   const MAX = 16000;
   const r2 = radius * radius;
   const placements = [];
@@ -927,6 +927,11 @@ function buildGrass(group, grassPolys, groundY, radius = 320) {
     const pts = scatterInPolygon(gp.ring, 2.1, seed++);
     for (const p of pts) {
       if (p.x * p.x + p.z * p.z > r2) continue;
+      if (exclude) {
+        const dx = p.x - exclude.x;
+        const dz = p.z - exclude.z;
+        if (dx * dx + dz * dz < exclude.r2) continue;
+      }
       placements.push(p);
       if (placements.length >= MAX) break;
     }
@@ -1386,6 +1391,11 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     pushGroundPatch(cobblePos, cxp, czp, ox, oz, -oz, ox, depth, 4.5, groundY, 0.07);
   }
 
+  // A cobbled market square under the spawn point, so the very first ground the
+  // player stands on reads as real paving instead of the blurry aerial photo.
+  const spawn = pickSpawn(bCentroids);
+  pushGroundPatch(cobblePos, spawn.x, spawn.z, 1, 0, 0, 1, 9, 9, groundY, 0.07);
+
   const group = new THREE.Group();
 
   if (buildingGeos.length) {
@@ -1538,7 +1548,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   scene.add(group);
 
   buildTrees(group, woods, groundY);
-  buildGrass(group, grassPolys, groundY);
+  buildGrass(group, grassPolys, groundY, 320, { x: spawn.x, z: spawn.z, r2: 110 });
   buildLamps(group, roadLines, groundY);
   buildChimneys(group, chimneySpecs);
   buildCars(group, roadLines, groundY);
@@ -1547,7 +1557,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   return {
     bounds,
     counts: data.meta?.counts || {},
-    spawn: pickSpawn(bCentroids),
+    spawn,
     colliders,
     waterGeo,
     landmarks,
