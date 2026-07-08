@@ -9,6 +9,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { makeProjector, metresToLatLon } from './lib/geo.js';
 import { makeHeightField } from './lib/terrain.js';
 import { buildGrid, collide } from './lib/collision.js';
@@ -152,6 +153,37 @@ const bloom = new UnrealBloomPass(
   0.9,
 );
 composer.addPass(bloom);
+
+// A restrained photographic grade: a touch more colour, and a soft vignette
+// that draws the eye to the centre the way a real lens falls off at the edges.
+// Kept subtle so it reads as a camera, not a filter.
+const GradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uSaturation: { value: 1.08 },
+    uVignette: { value: 0.82 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uSaturation;
+    uniform float uVignette;
+    varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb = mix(vec3(l), c.rgb, uSaturation);
+      float d = length(vUv - 0.5);
+      c.rgb *= mix(1.0, uVignette, smoothstep(0.35, 0.85, d));
+      gl_FragColor = c;
+    }`,
+};
+composer.addPass(new ShaderPass(GradeShader));
 
 composer.addPass(new OutputPass());
 
