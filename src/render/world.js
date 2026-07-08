@@ -988,7 +988,7 @@ export function buildTerrain(scene, hf, texture = null, opts = {}) {
   const overlay = !!opts.size;
   const size = overlay ? opts.size : hf.size;
   const half = size / 2;
-  const seg = overlay ? Math.max(2, Math.round(size / 10)) : (hf.n - 1) * 3;
+  const seg = overlay ? Math.max(2, Math.round(size / 5)) : (hf.n - 1) * 3;
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;

@@ -14,6 +14,35 @@ const CLIP_ALIASES = {
   Jump: ['Jump', 'JumpUp', 'Running', 'Run'],
 };
 
+// A soft round contact shadow that sits under the feet so the character reads as
+// planted on the ground instead of floating. It is a child of the avatar root, so
+// it follows the walker and hides with it in first person.
+function makeContactShadow() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+  g.addColorStop(0, 'rgba(0,0,0,0.5)');
+  g.addColorStop(0.55, 'rgba(0,0,0,0.24)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0.9,
+  });
+  const geo = new THREE.PlaneGeometry(1.5, 1.5);
+  geo.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = 0.03;
+  mesh.renderOrder = 2;
+  return mesh;
+}
+
 export class Avatar {
   constructor() {
     this.root = new THREE.Group();
@@ -21,6 +50,7 @@ export class Avatar {
     this.actions = {};
     this.current = null;
     this.ready = false;
+    this.root.add(makeContactShadow());
   }
 
   async load(url, options = {}) {

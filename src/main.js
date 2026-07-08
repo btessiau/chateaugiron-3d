@@ -79,7 +79,7 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.6;
-const S = 650;
+const S = 420;
 Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 1, far: 3000 });
 sun.shadow.camera.updateProjectionMatrix();
 scene.add(sun);
