@@ -353,15 +353,29 @@ function htHash(i) {
   return ((h >>> 0) % 1000) / 1000;
 }
 
-// Muted painted infill tones seen on Chateaugiron's timbered houses: warm
-// cream, golden ochre, faded rose, Breton grey-blue, sage, and soft brick.
-// These multiply the cream colombage texture, so they only ever tint it toward
-// an aged, painted plaster tone (never brighter than the cream base), and the
-// dark oak framing stays dark. A per-building hash gives a varied painted row
-// instead of one repeated house.
-const HT_INFILL = [0xf3ecd9, 0xe9cf93, 0xe1b6a0, 0xc3cad2, 0xccc9a4, 0xd7a892];
+// Muted painted infill tones seen on Chateaugiron's timbered houses, weighted to
+// match the real street: most walls are lime-washed warm cream, with golden
+// ochre common and faded rose, Breton grey-blue, sage and soft brick as rarer
+// accents. These multiply the cream colombage texture, so they only ever tint it
+// toward an aged painted plaster tone (never brighter than the cream base) and
+// the dark oak framing stays dark. A per-building hash gives a varied painted
+// row instead of one repeated house. Weights are percentages and sum to 100.
+const HT_INFILL = [
+  { c: 0xf3ecd9, w: 60 }, // warm cream / off-white, dominant
+  { c: 0xe9cf93, w: 20 }, // golden ochre / honey
+  { c: 0xe1b6a0, w: 8 }, // faded rose / terracotta
+  { c: 0xc3cad2, w: 4 }, // Breton grey-blue
+  { c: 0xccc9a4, w: 4 }, // sage / olive
+  { c: 0xd7a892, w: 4 }, // soft brick / salmon
+];
 function htInfill(i) {
-  return HT_INFILL[Math.floor(htHash(i + 613) * HT_INFILL.length) % HT_INFILL.length];
+  const r = htHash(i + 613) * 100;
+  let acc = 0;
+  for (const e of HT_INFILL) {
+    acc += e.w;
+    if (r < acc) return e.c;
+  }
+  return HT_INFILL[0].c;
 }
 
 // Multiply a tiling facade texture onto the vertical walls of the merged
