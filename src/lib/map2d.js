@@ -169,9 +169,11 @@ export function stepPlayer(grid, pos, dx, dn, r) {
 
 // Move the player one step, but if the desired heading is blocked, fan out to
 // nearby headings and take the first that is clear. This lets a single held key
-// follow a curving lane or slide along a wall instead of snagging the moment the
-// road bends, while still never entering a blocked (off-road) cell.
-const GLIDE_FAN = [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2];
+// follow a curving lane and, crucially, glide along a road border instead of
+// stopping dead: the fan reaches almost a right angle, so when you push into the
+// edge of a lane you slide along it rather than sticking. It never enters a
+// blocked (off-road) cell.
+const GLIDE_FAN = [0, 0.25, -0.25, 0.5, -0.5, 0.8, -0.8, 1.1, -1.1, 1.4, -1.4, 1.55, -1.55];
 export function glide(grid, pos, dx, dn, r) {
   const speed = Math.hypot(dx, dn);
   if (speed === 0) return { x: pos.x, n: pos.n };
@@ -211,7 +213,7 @@ export function facingFrom(dx, dn, prev) {
 // Travel speeds in metres per second. On foot the player walks or runs (Shift);
 // on the bicycle they cruise much faster and can still sprint, so crossing the
 // whole town takes a few seconds.
-export const TRAVEL = { walk: 4.6, run: 9.5, bike: 13, bikeSprint: 22 };
+export const TRAVEL = { walk: 4.6, run: 9.5, bike: 18, bikeSprint: 30 };
 export function travelSpeed({ bike, run } = {}) {
   if (bike) return run ? TRAVEL.bikeSprint : TRAVEL.bike;
   return run ? TRAVEL.run : TRAVEL.walk;

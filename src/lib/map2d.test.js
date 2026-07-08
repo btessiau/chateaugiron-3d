@@ -184,6 +184,16 @@ describe('glide', () => {
     g.data.fill(1);
     expect(glide(g, { x: 5, n: 5 }, 1, 0, 0.4)).toEqual({ x: 5, n: 5 });
   });
+  it('glides along a road border when pushed into it near a right angle', () => {
+    // An east-west lane (open rows 10..13). Standing at its north edge and
+    // pushing north must slide along the border, not stop dead.
+    const g = makeGrid({ minX: 0, minN: 0, maxX: 30, maxN: 30 }, 1);
+    g.data.fill(1);
+    for (let n = 10; n < 14; n++) for (let x = 0; x < 30; x++) g.data[n * g.cols + x] = 0;
+    const p = glide(g, { x: 15, n: 13.3 }, 0, 1, 0.6);
+    expect(Math.abs(p.x - 15)).toBeGreaterThan(0.3); // slid sideways along the edge
+    expect(p.n).toBeLessThanOrEqual(14); // stayed on the lane
+  });
 });
 
 describe('inputVector', () => {
