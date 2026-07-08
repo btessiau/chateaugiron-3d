@@ -1662,6 +1662,15 @@ function addGroundDetail(mat, featherHalf = null) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = position.xz;');
     let grain = `#include <map_fragment>
 {
+  // Tame the cold blue haze the aerial photo carries in shadow and near field so
+  // the eye level ground reads as natural stone and earth, not a blue smear. Only
+  // pixels where blue outweighs red and green are pulled toward a warm grey, so
+  // the green lawns and the warm roofs keep their colour.
+  float blueCast = clamp(diffuseColor.b - max(diffuseColor.r, diffuseColor.g), 0.0, 1.0);
+  float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum) * vec3(1.06, 1.0, 0.9), clamp(blueCast * 2.2, 0.0, 0.85));
+}
+{
   float n = gNoise(vGroundXZ*0.7)*0.55 + gNoise(vGroundXZ*2.7)*0.3 + gNoise(vGroundXZ*8.0)*0.15;
   diffuseColor.rgb *= (0.82 + 0.36*n);
 }
