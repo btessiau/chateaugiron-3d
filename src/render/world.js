@@ -904,6 +904,13 @@ const CAR_ROADS = new Set([
   'living_street',
 ]);
 
+// Paved-stone ways of the historic core: the square by the eglise and the
+// approaches to the chateau. Only these pedestrian types, and only near the two
+// landmarks (the CORE disc), get real cobblestone. The modern outer roads and
+// through traffic stay asphalt, which is how the town actually looks.
+const COBBLE_ROADS = new Set(['pedestrian', 'living_street', 'footway', 'path', 'steps']);
+const CORE = { x: -70, z: -120, r: 210 };
+
 function lampGeoParts() {
   const pole = new THREE.CylinderGeometry(0.08, 0.13, 4.4, 6);
   pole.translate(0, 2.2, 0);
@@ -1140,6 +1147,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const greenGeos = [];
   const roadPos = [];
   const roadCol = [];
+  const cobblePos = [];
   const bCentroids = [];
   const colliders = [];
   const woods = [];
@@ -1289,7 +1297,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       drapeGeo(geo, groundY, 0.03);
       greenGeos.push(geo);
     } else if (f.k === 'road') {
-      addRoad(pts, f.t, roadPos, roadCol, groundY);
+      addRoad(pts, f.t, roadPos, roadCol, groundY, cobblePos);
       roadLines.push({ pts, hw: f.t.highway });
     }
   }
@@ -1404,6 +1412,22 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     group.add(mesh);
   }
 
+  if (cobblePos.length) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cobblePos), 3));
+    geo.computeVertexNormals();
+    planarUV(geo, 2.5);
+    const mat = new THREE.MeshStandardMaterial({
+      map: tiledTexture('cobblestone.jpg'),
+      roughness: 0.95,
+      metalness: 0,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.receiveShadow = true;
+    mesh.renderOrder = 2;
+    group.add(mesh);
+  }
+
   let waterGeo = null;
   if (waterGeos.length) {
     waterGeo = mergeGeometries(waterGeos, false);
@@ -1429,9 +1453,28 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   };
 }
 
-function addRoad(pts, tags, outPos, outCol, groundY) {
+function addRoad(pts, tags, outPos, outCol, groundY, cobbleOut) {
   const ribbon = buildRoadRibbon(pts, roadWidth(tags.highway), 0);
   if (!ribbon.length) return;
+  // Cobble the historic-core paved ways; everything else stays asphalt.
+  if (cobbleOut && COBBLE_ROADS.has(tags.highway)) {
+    let sx = 0;
+    let sz = 0;
+    for (const p of pts) {
+      sx += p[0];
+      sz += p[1];
+    }
+    const cx = sx / pts.length;
+    const cz = sz / pts.length;
+    if ((cx - CORE.x) ** 2 + (cz - CORE.z) ** 2 <= CORE.r * CORE.r) {
+      for (let i = 0; i < ribbon.length; i += 3) {
+        const x = ribbon[i];
+        const z = ribbon[i + 2];
+        cobbleOut.push(x, groundY(x, z) + 0.07, z);
+      }
+      return;
+    }
+  }
   const c = new THREE.Color(roadColor(tags.highway));
   for (let i = 0; i < ribbon.length; i += 3) {
     const x = ribbon[i];
