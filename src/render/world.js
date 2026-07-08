@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingHeight, baseHeight } from '../lib/osm.js';
 import { pickSpawn } from '../lib/spawn.js';
 import { orientedBox, gableRoofPositions } from '../lib/roof.js';
+import { chimneyFor } from '../lib/chimney.js';
 import { scatterInPolygon } from '../lib/scatter.js';
 import { lampPointsAlong } from '../lib/streetlamps.js';
 import { isChurch, isChapel, towerPlacement, pyramidPositions } from '../lib/landmark.js';
@@ -921,6 +922,39 @@ function buildLamps(group, roadLines, groundY, opts = {}) {
   group.add(poles);
   group.add(lanterns);
 }
+
+// Short stone chimneys seated on the gable ends of pitched roofs. One instanced
+// box mesh keeps the whole town's worth cheap. `specs` come from chimneyFor.
+function buildChimneys(group, specs) {
+  if (!specs || !specs.length) return;
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x6f6558,
+    roughness: 0.95,
+    metalness: 0,
+  });
+  const mesh = new THREE.InstancedMesh(geo, mat, specs.length);
+  mesh.name = 'chimneys';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const pos = new THREE.Vector3();
+  const scale = new THREE.Vector3();
+  for (let i = 0; i < specs.length; i++) {
+    const s = specs[i];
+    const h = Math.max(0.6, s.top - s.base);
+    q.setFromAxisAngle(up, s.angle);
+    pos.set(s.x, s.base + h / 2, s.z);
+    scale.set(s.size, h, s.size);
+    m.compose(pos, q, scale);
+    mesh.setMatrixAt(i, m);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  group.add(mesh);
+}
+
 export function addTreePoints(scene, points, proj, groundY) {
   const placements = points.map((ll, i) => {
     const [x, z] = proj.project(ll[0], ll[1]);
@@ -957,6 +991,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
 
   const buildingGeos = [];
   const roofGeos = [];
+  const chimneySpecs = [];
   const towerGeos = [];
   const spireGeos = [];
   const interiorGeos = [];
@@ -1072,6 +1107,16 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
         rgeo.computeVertexNormals();
         setColorAttr(rgeo, slateColor(bi));
         roofGeos.push(rgeo);
+
+        // Most of these roofs carry a Breton gable-end stone chimney. Skip a
+        // seeded third so the rooftops are not uniform, and only near the core.
+        if (
+          cx * cx + cz * cz <= 620 * 620 &&
+          Math.abs((Math.sin(bi * 91.7) * 4137.13) % 1) < 0.66
+        ) {
+          const chim = chimneyFor(box, wallTop, roofH, bi);
+          if (chim) chimneySpecs.push(chim);
+        }
       }
       bi++;
     } else if (f.k === 'water') {
@@ -1227,6 +1272,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   buildTrees(group, woods, groundY);
   buildGrass(group, grassPolys, groundY);
   buildLamps(group, roadLines, groundY);
+  buildChimneys(group, chimneySpecs);
   buildChateau(group, groundY, colliders, landmarks);
 
   return {
