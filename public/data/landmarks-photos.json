@@ -150,5 +150,27 @@
       "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_Vieille_maison_rue_du_porche.jpg",
       "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en"
     }
+  ],
+  "heritage_trail": [
+    {
+      "file": "textures/landmarks/heritage_halles_01.jpg",
+      "w": 1600,
+      "h": 1200,
+      "title": "Les Halles",
+      "license": "CC BY-SA 2.5",
+      "author": "Thomas Beline (Izidor)",
+      "source": "https://commons.wikimedia.org/wiki/File:Halles_de_Ch%C3%A2teaugiron.JPG",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.5"
+    },
+    {
+      "file": "textures/landmarks/heritage_maison_yaigne_01.jpg",
+      "w": 893,
+      "h": 1191,
+      "title": "Maison rue d'Yaigne",
+      "license": "CC0",
+      "author": "GO69",
+      "source": "https://commons.wikimedia.org/wiki/File:Ch%C3%A2teaugiron_(35)_Vieille_maison_rue_d%27Yaigne.jpg",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en"
+    }
   ]
 }

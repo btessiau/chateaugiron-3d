@@ -159,6 +159,35 @@ function placeChurchPhotos(scene, ch, manifest, base) {
   }
 }
 
+// A small heritage-trail cluster in the church forecourt: framed boards of two
+// more real Chateaugiron monuments (Les Halles, an old rue d'Yaigne house),
+// flanking the church facade board on the same open, terrain-followed forecourt
+// and facing the approaching player. Each carries its own author and licence.
+function placeHeritageTrail(scene, ch, manifest, base) {
+  const arr = manifest.heritage_trail;
+  if (!arr || !arr.length) return;
+  const { box, gy } = ch;
+  const { cx, cz, ux, uz, vx, vz, L } = box;
+  const toWorld = (s, t) => [cx + ux * s + vx * t, cz + uz * s + vz * t];
+  const yaw = Math.atan2(-ux, -uz); // face outward, toward the approaching player
+  const ph = 3.2;
+  const offsets = [4.5, -4.5];
+  for (let i = 0; i < offsets.length && i < arr.length; i++) {
+    const entry = arr[i];
+    const aspect = entry.w / entry.h;
+    const [x, z] = toWorld(-L - 7, offsets[i]);
+    const g = photoPanel(
+      base + entry.file,
+      aspect,
+      ph,
+      capLines(entry, entry.title || 'Patrimoine'),
+    );
+    g.rotation.y = yaw;
+    g.position.set(x, gy + 1.1 + ph / 2, z);
+    scene.add(g);
+  }
+}
+
 function placeKeepBoard(scene, kp, manifest, base) {
   const ext =
     pick(manifest, 'chateau_exterior', /donjon_sun/) ||
@@ -253,6 +282,7 @@ export async function addLandmarkPhotos(scene, landmarks, base = './') {
   }
   if (!manifest) return null;
   if (landmarks.church) placeChurchPhotos(scene, landmarks.church, manifest, base);
+  if (landmarks.church) placeHeritageTrail(scene, landmarks.church, manifest, base);
   if (landmarks.keep) placeKeepBoard(scene, landmarks.keep, manifest, base);
   if (landmarks.oldtown && landmarks.oldtown.length) {
     placeOldTownFacades(scene, landmarks.oldtown, manifest, base);
