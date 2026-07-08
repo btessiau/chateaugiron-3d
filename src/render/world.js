@@ -177,16 +177,6 @@ function planarUV(geo, tile) {
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 }
 
-// Load a tiling CC0 colour map from public/textures as an sRGB repeating texture.
-function tiledTexture(name) {
-  const tex = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/${name}`);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  return tex;
-}
-
 const CHUNK_M = 150; // town chunk size in metres, for frustum and distance culling
 
 // Split world placed geometries into a grid of square chunks and merge each cell
@@ -613,16 +603,16 @@ function buildChurchInto(o) {
   const wGeo = new THREE.ExtrudeGeometry(wShape, { depth: 0.2, bevelEnabled: false });
   wGeo.rotateY(angV);
   wGeo.translate(gwx, faceBaseY + 1.2, gwz);
-  decorMeshes.push(new THREE.Mesh(wGeo, new THREE.MeshBasicMaterial({ color: 0x28303f })));
+  decorMeshes.push(new THREE.Mesh(wGeo, new THREE.MeshBasicMaterial({ color: 0xe3b552 })));
   const oc = new THREE.CylinderGeometry(0.85, 0.85, 0.25, 20);
   oc.rotateZ(Math.PI / 2);
   oc.rotateY(angU);
   oc.translate(gwx, faceBaseY + 6.8, gwz);
-  decorMeshes.push(new THREE.Mesh(oc, new THREE.MeshBasicMaterial({ color: 0x28303f })));
+  decorMeshes.push(new THREE.Mesh(oc, new THREE.MeshBasicMaterial({ color: 0xe3b552 })));
   for (const sgn of [-1, 1]) {
     const lv = slabU(0.3, 1.0, 4.5, frontS + 0.1, sgn * 1.5, belfryBase + 5.5);
     decorMeshes.push(
-      new THREE.Mesh(lv, new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.9 })),
+      new THREE.Mesh(lv, new THREE.MeshStandardMaterial({ color: 0x3f4756, roughness: 0.9 })),
     );
   }
 }
@@ -943,25 +933,23 @@ function buildWarMemorial(group, church, groundY, colliders) {
 }
 
 function buildChateau(group, groundY, colliders, landmarks = null) {
-  const stone = new THREE.MeshStandardMaterial({ color: 0x9c8a6e, roughness: 0.9, metalness: 0.0 });
+  // Flat cartoon château stone + slate, no photo maps: pale limestone walls and
+  // deep slate-blue cones that match the town roof palette, so the castle reads
+  // as part of the same toy town.
+  const stone = new THREE.MeshStandardMaterial({ color: 0xd6ccb6, roughness: 0.9, metalness: 0.0 });
   const darkStone = new THREE.MeshStandardMaterial({
-    color: 0x6f6656,
-    roughness: 0.92,
+    color: 0xb3a892,
+    roughness: 0.9,
     metalness: 0.0,
   });
-  const slateTex = tiledTexture('roof-slate.jpg');
-  slateTex.repeat.set(8, 3);
   const slate = new THREE.MeshStandardMaterial({
-    map: slateTex,
-    color: 0x8b929b,
-    roughness: 0.6,
-    metalness: 0.12,
+    color: 0x59677d,
+    roughness: 0.85,
+    metalness: 0.0,
   });
-  const turretTex = tiledTexture('castle-wall.jpg');
-  turretTex.repeat.set(4, 3);
   const turretStone = new THREE.MeshStandardMaterial({
-    map: turretTex,
-    roughness: 0.95,
+    color: 0xd6ccb6,
+    roughness: 0.9,
     metalness: 0.0,
   });
 
@@ -1007,11 +995,9 @@ function buildChateau(group, groundY, colliders, landmarks = null) {
       maxZ: wz + chord / 2,
     });
   }
-  const shaftTex = tiledTexture('castle-wall.jpg');
-  shaftTex.repeat.set(1, 9);
   const shaftMat = new THREE.MeshStandardMaterial({
-    map: shaftTex,
-    roughness: 0.95,
+    color: 0xd6ccb6,
+    roughness: 0.9,
     metalness: 0.0,
   });
   const shaft = new THREE.Mesh(mergeGeometries(wallGeos, false), shaftMat);
@@ -1969,7 +1955,6 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
-    applyFacade(mat, tiledTexture('castle-wall.jpg'), 1 / 2.4);
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -1989,8 +1974,8 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x1b2129,
-      roughness: 0.96,
+      color: 0x59677d,
+      roughness: 0.9,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
@@ -2026,10 +2011,9 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cobblePos), 3));
     geo.computeVertexNormals();
-    planarUV(geo, 2.5);
     const mat = new THREE.MeshStandardMaterial({
-      map: tiledTexture('cobblestone.jpg'),
-      roughness: 0.95,
+      color: 0xc2b7a2,
+      roughness: 0.98,
       metalness: 0,
       side: THREE.DoubleSide,
     });
