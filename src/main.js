@@ -4,6 +4,11 @@
 
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { makeProjector, metresToLatLon } from './lib/geo.js';
 import { makeHeightField } from './lib/terrain.js';
 import { buildGrid, collide } from './lib/collision.js';
@@ -106,6 +111,47 @@ scene.add(sun.target);
 const fill = new THREE.DirectionalLight(0xaec6ea, 0.5);
 fill.position.set(-sunDir.x * 600, 420, -sunDir.z * 600);
 scene.add(fill);
+
+// ---- Postprocessing ----
+// The scene renders into an HDR, multisampled buffer so image effects can be
+// layered without losing edge antialiasing. Ambient occlusion adds the soft
+// contact shadow where walls meet the street and under the eaves, a gentle
+// bloom lifts only the brightest speculars, and the final pass tone maps back
+// to the screen. This is the biggest single step toward a photographic look.
+const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+const hdrTarget = new THREE.WebGLRenderTarget(drawSize.x, drawSize.y, {
+  type: THREE.HalfFloatType,
+  samples: 4,
+});
+const composer = new EffectComposer(renderer, hdrTarget);
+composer.addPass(new RenderPass(scene, camera));
+
+const gtao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+gtao.output = GTAOPass.OUTPUT.Default;
+gtao.updateGtaoMaterial({
+  radius: 0.75,
+  distanceExponent: 1.0,
+  thickness: 1.2,
+  scale: 1.0,
+  samples: 16,
+  distanceFallOff: 1.0,
+  screenSpaceRadius: false,
+});
+composer.addPass(gtao);
+
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.16,
+  0.5,
+  0.9,
+);
+composer.addPass(bloom);
+
+composer.addPass(new OutputPass());
+
+function renderFrame() {
+  composer.render();
+}
 
 // ---- Walker ----
 let player = null;
@@ -354,6 +400,7 @@ async function init() {
     water,
     ambience,
     landmarks: world.landmarks,
+    render: renderFrame,
   };
 }
 
@@ -447,7 +494,7 @@ function tick() {
     waterNormals.offset.y += dt * 0.009;
   }
   updateHud();
-  renderer.render(scene, camera);
+  renderFrame();
   requestAnimationFrame(tick);
 }
 tick();
@@ -456,6 +503,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 init();
