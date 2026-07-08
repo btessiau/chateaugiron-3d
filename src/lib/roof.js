@@ -113,3 +113,47 @@ export function gableRoofPositions(box, wallTop, roofHeight) {
   for (const t of tris) out.push(t[0], t[1], t[2]);
   return out;
 }
+
+// Hipped roof triangles for an oriented box: four slopes meeting a ridge that is
+// inset from both ends by the hip run, so large or squarish footprints get a
+// proper slate roof instead of a flat top. When the footprint is square the
+// ridge collapses to a point and the roof becomes a pyramid. Same vertex layout
+// as gableRoofPositions (6 triangles, 54 numbers).
+export function hipRoofPositions(box, wallTop, roofHeight) {
+  const { cx, cz, ux, uz, vx, vz, L, W } = box;
+  const top = wallTop + roofHeight;
+  const ridgeHalf = Math.max(0, L - W);
+  const P = (a, b, y) => [cx + ux * a + vx * b, y, cz + uz * a + vz * b];
+
+  const c00 = P(-L, -W, wallTop);
+  const c10 = P(L, -W, wallTop);
+  const c11 = P(L, W, wallTop);
+  const c01 = P(-L, W, wallTop);
+  const r0 = P(-ridgeHalf, 0, top);
+  const r1 = P(ridgeHalf, 0, top);
+
+  const tris = [
+    c00,
+    c10,
+    r1,
+    c00,
+    r1,
+    r0, // slope on the -W side
+    c11,
+    c01,
+    r0,
+    c11,
+    r0,
+    r1, // slope on the +W side
+    c00,
+    r0,
+    c01, // hip end at -L
+    c10,
+    c11,
+    r1, // hip end at +L
+  ];
+
+  const out = [];
+  for (const t of tris) out.push(t[0], t[1], t[2]);
+  return out;
+}

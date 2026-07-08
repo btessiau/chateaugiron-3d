@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingHeight, baseHeight } from '../lib/osm.js';
 import { pickSpawn } from '../lib/spawn.js';
-import { orientedBox, gableRoofPositions } from '../lib/roof.js';
+import { orientedBox, gableRoofPositions, hipRoofPositions } from '../lib/roof.js';
 import { chimneyFor } from '../lib/chimney.js';
 import { scatterInPolygon } from '../lib/scatter.js';
 import { lampPointsAlong } from '../lib/streetlamps.js';
@@ -542,6 +542,53 @@ function addTurret(group, x, z, gy, radius, height, coneH, stoneMat, slateMat) {
   cone.position.set(x, gy + height + coneH / 2, z);
   cone.castShadow = true;
   group.add(cone);
+  const finial = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.13, 8, 6), stoneMat);
+  finial.position.set(x, gy + height + coneH + radius * 0.1, z);
+  group.add(finial);
+}
+
+// The Tour de l'Horloge: a round stone tower with a broad slate roof, a small
+// open belfry (four posts and a slate cap) and a finial with a weather vane.
+function addClockTower(group, x, z, gy, stoneMat, slateMat, trimMat, colliders) {
+  const r = 3.2;
+  const bodyH = 15;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.06, bodyH, 16), stoneMat);
+  body.position.set(x, gy + bodyH / 2, z);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(r * 1.2, 4.5, 16), slateMat);
+  roof.position.set(x, gy + bodyH + 2.25, z);
+  roof.castShadow = true;
+  group.add(roof);
+  const belfryY = gy + bodyH + 4.5;
+  const bh = 3.0;
+  const br = 1.5;
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.42, bh, 0.42), trimMat);
+    post.position.set(x + Math.cos(a) * br, belfryY + bh / 2, z + Math.sin(a) * br);
+    post.castShadow = true;
+    group.add(post);
+  }
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(br * 1.5, 2.6, 8), slateMat);
+  cap.position.set(x, belfryY + bh + 1.3, z);
+  cap.castShadow = true;
+  group.add(cap);
+  const spike = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.7, 6), trimMat);
+  spike.position.set(x, belfryY + bh + 2.6 + 0.85, z);
+  group.add(spike);
+  const vane = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.55, 0.05), trimMat);
+  vane.position.set(x + 0.55, belfryY + bh + 2.6 + 1.35, z);
+  group.add(vane);
+  if (colliders) {
+    colliders.push({
+      minX: x - (r + 0.3),
+      maxX: x + (r + 0.3),
+      minZ: z - (r + 0.3),
+      maxZ: z + (r + 0.3),
+    });
+  }
 }
 
 // Furnish the inside of the keep: a stone floor, a wooden mezzanine reached by
@@ -697,9 +744,9 @@ function buildWarMemorial(group, church, groundY, colliders) {
 }
 
 function buildChateau(group, groundY, colliders, landmarks = null) {
-  const stone = new THREE.MeshStandardMaterial({ color: 0x8f887b, roughness: 0.9, metalness: 0.0 });
+  const stone = new THREE.MeshStandardMaterial({ color: 0x9c8a6e, roughness: 0.9, metalness: 0.0 });
   const darkStone = new THREE.MeshStandardMaterial({
-    color: 0x7d766a,
+    color: 0x6f6656,
     roughness: 0.92,
     metalness: 0.0,
   });
@@ -707,7 +754,7 @@ function buildChateau(group, groundY, colliders, landmarks = null) {
   slateTex.repeat.set(8, 3);
   const slate = new THREE.MeshStandardMaterial({
     map: slateTex,
-    color: 0xbfc6cf,
+    color: 0x8b929b,
     roughness: 0.6,
     metalness: 0.12,
   });
@@ -725,7 +772,7 @@ function buildChateau(group, groundY, colliders, landmarks = null) {
   const kx = -77;
   const kz = -27;
   const gy = groundY(kx, kz);
-  const shaftH = 27;
+  const shaftH = 34; // the real donjon stands about 38 m, the tallest thing in town
   const rTop = 6.2;
   const rWall = 6.5;
   const N = 18;
@@ -796,15 +843,20 @@ function buildChateau(group, groundY, colliders, landmarks = null) {
     group.add(merlon);
   }
 
-  // Two pepperpot turrets flanking the logis.
-  for (const [tx, tz] of [
-    [-101, -14],
-    [-79, 6],
-  ]) {
-    const tgy = groundY(tx, tz);
-    addTurret(group, tx, tz, tgy, 3.1, 15, 8, turretStone, slate);
-    colliders.push({ minX: tx - 3.4, maxX: tx + 3.4, minZ: tz - 3.4, maxZ: tz + 3.4 });
+  // Round towers with tall conical slate "poivriere" roofs, plus the Tour de
+  // l'Horloge with its open belfry. Together with the donjon these give the
+  // castle its recognisable multi-tower silhouette.
+  const towers = [
+    { x: -101, z: -14, r: 3.7, h: 18, cone: 12 },
+    { x: -79, z: 6, r: 3.5, h: 17, cone: 11 },
+  ];
+  for (const t of towers) {
+    const tgy = groundY(t.x, t.z);
+    addTurret(group, t.x, t.z, tgy, t.r, t.h, t.cone, turretStone, slate);
+    const rc = t.r + 0.4;
+    colliders.push({ minX: t.x - rc, maxX: t.x + rc, minZ: t.z - rc, maxZ: t.z + rc });
   }
+  addClockTower(group, -63, -9, groundY(-63, -9), turretStone, slate, darkStone, colliders);
 }
 
 // A procedurally painted leafy canopy on a transparent background, used as a
@@ -1416,28 +1468,35 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       const shape = ringToShape(pts);
       if (!shape) continue;
       const base = baseHeight(f.t);
-      const top = buildingHeight(f.t, polygonArea(pts), bi);
-      const wallH = Math.max(1.5, top - base); // real eaves height from IGN BD TOPO
+      const rawTop = buildingHeight(f.t, polygonArea(pts), bi);
+      // Cap ordinary town buildings so none rivals the 34 m donjon or the church
+      // spire. The real town has almost nothing above four storeys.
+      const wallH = Math.min(Math.max(1.5, rawTop - base), 15);
 
-      // Pitched slate roof on top of the wall. Skip tiny footprints and very
-      // large ones (big commercial or civic blocks read better flat).
+      // Every building gets a slate roof: a gable for houses, a hip for the big
+      // or squarish blocks so nothing is left with a flat modern top.
       const box = orientedBox(pts);
       const area4 = 4 * box.L * box.W;
-      const gabled = box.L >= 1.5 && box.W >= 1.0 && box.W <= 22 && area4 <= 2200;
+      const roofable = box.L >= 1.5 && box.W >= 1.0;
+      const gabled = roofable && box.W <= 22 && area4 <= 2200;
+      const hipped = roofable && !gabled;
 
-      // Real roof rise (ridge minus eaves) from IGN BD TOPO when we have it,
-      // else a width-based guess.
+      // Real roof rise (ridge minus eaves) from IGN BD TOPO when we have it, else
+      // a width-based guess. Hips stay shallow so wide roofs do not spike.
       const rrTag = f.t['roof:height'];
       const realRise = rrTag != null ? parseFloat(rrTag) : NaN;
-      const roofH = Number.isFinite(realRise)
-        ? Math.min(Math.max(realRise, 0.8), 9)
-        : Math.min(Math.max(box.W * 0.8, 1.0), 4.5);
-      // Flat blocks carry no separate roof mesh, so raise the wall to the real
-      // ridge instead of stopping at the eaves.
-      const flatExtra = !gabled && Number.isFinite(realRise) ? realRise : 0;
+      let roofH;
+      if (gabled) {
+        roofH = Number.isFinite(realRise)
+          ? Math.min(Math.max(realRise, 0.8), 9)
+          : Math.min(Math.max(box.W * 0.8, 1.0), 4.5);
+      } else {
+        const rise = Number.isFinite(realRise) ? realRise : box.W * 0.35;
+        roofH = Math.min(Math.max(rise, 1.2), 5);
+      }
 
       const embed = 1.5; // sink the base into the terrain so slopes leave no gap
-      const depth = wallH + flatExtra + embed;
+      const depth = wallH + embed;
       let geo;
       try {
         geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1 });
@@ -1466,18 +1525,21 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
         }
       }
 
-      if (gabled) {
+      if (gabled || hipped) {
         const wallTop = groundY(cx, cz) + base + wallH;
-        const rp = gableRoofPositions(box, wallTop, roofH);
+        const rp = gabled
+          ? gableRoofPositions(box, wallTop, roofH)
+          : hipRoofPositions(box, wallTop, roofH);
         const rgeo = new THREE.BufferGeometry();
         rgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(rp), 3));
         rgeo.computeVertexNormals();
         setColorAttr(rgeo, slateColor(bi));
         roofGeos.push(rgeo);
 
-        // Most of these roofs carry a Breton gable-end stone chimney. Skip a
+        // Most gabled roofs carry a Breton gable-end stone chimney. Skip a
         // seeded third so the rooftops are not uniform, and only near the core.
         if (
+          gabled &&
           cx * cx + cz * cz <= 620 * 620 &&
           Math.abs((Math.sin(bi * 91.7) * 4137.13) % 1) < 0.66
         ) {
