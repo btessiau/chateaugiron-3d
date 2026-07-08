@@ -353,6 +353,17 @@ function htHash(i) {
   return ((h >>> 0) % 1000) / 1000;
 }
 
+// Muted painted infill tones seen on Chateaugiron's timbered houses: warm
+// cream, golden ochre, faded rose, Breton grey-blue, sage, and soft brick.
+// These multiply the cream colombage texture, so they only ever tint it toward
+// an aged, painted plaster tone (never brighter than the cream base), and the
+// dark oak framing stays dark. A per-building hash gives a varied painted row
+// instead of one repeated house.
+const HT_INFILL = [0xf3ecd9, 0xe9cf93, 0xe1b6a0, 0xc3cad2, 0xccc9a4, 0xd7a892];
+function htInfill(i) {
+  return HT_INFILL[Math.floor(htHash(i + 613) * HT_INFILL.length) % HT_INFILL.length];
+}
+
 // Multiply a tiling facade texture onto the vertical walls of the merged
 // building mesh, in world space, leaving roofs and flat tops untouched.
 function applyFacade(mat, tex, scale = 1 / 3.0) {
@@ -1694,7 +1705,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
         box.L <= 16 &&
         box.W <= 12 &&
         htHash(bi) < 0.62;
-      setColorAttr(geo, halfTimber ? new THREE.Color(0xe9ddc2) : hashHue(bi));
+      setColorAttr(geo, halfTimber ? new THREE.Color(htInfill(bi)) : hashHue(bi));
       if (halfTimber) halfTimberGeos.push(geo);
       else buildingGeos.push(geo);
 
