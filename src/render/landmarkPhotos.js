@@ -139,50 +139,53 @@ function placeChurchPhotos(scene, ch, manifest, base) {
     scene.add(g);
   }
 
-  // Heritage board just outside the entrance with the real church facade.
+  // Heritage board with the real church facade, set to the SIDE of the parvis
+  // (a small gallery) so it never blocks the view of the real steeple ahead.
   const facade =
     pick(manifest, 'church_exterior', /exterior_03/) ||
     pick(manifest, 'church_exterior', /exterior_02/);
   if (facade) {
     const aspect = facade.w / facade.h;
-    const ph = 3.6;
-    const [x, z] = toWorld(-L - 5, 0);
+    const ph = 3.2;
+    const [x, z] = toWorld(-L - 6, 9);
+    const [apX, apZ] = toWorld(-L - 40, 0);
     const g = photoPanel(
       base + facade.file,
       aspect,
       ph,
       capLines(facade, 'Eglise Sainte-Marie-Madeleine'),
     );
-    g.rotation.y = Math.atan2(-ux, -uz);
+    g.rotation.y = faceAngle(vx, vz, x, z, apX, apZ);
     g.position.set(x, gy + 1.1 + ph / 2, z);
     scene.add(g);
   }
 }
 
-// A small heritage-trail cluster in the church forecourt: framed boards of two
-// more real Chateaugiron monuments (Les Halles, an old rue d'Yaigne house),
-// flanking the church facade board on the same open, terrain-followed forecourt
-// and facing the approaching player. Each carries its own author and licence.
+// A small heritage-trail cluster along the SIDE of the church parvis: framed
+// boards of two more real Chateaugiron monuments (Les Halles, an old rue
+// d'Yaigne house), lined up next to the church facade board as a side gallery
+// so the central view to the real steeple stays clear. Each carries its own
+// author and licence, and faces the approaching player.
 function placeHeritageTrail(scene, ch, manifest, base) {
   const arr = manifest.heritage_trail;
   if (!arr || !arr.length) return;
   const { box, gy } = ch;
   const { cx, cz, ux, uz, vx, vz, L } = box;
   const toWorld = (s, t) => [cx + ux * s + vx * t, cz + uz * s + vz * t];
-  const yaw = Math.atan2(-ux, -uz); // face outward, toward the approaching player
+  const [apX, apZ] = toWorld(-L - 40, 0); // approach point down the parvis axis
   const ph = 3.2;
-  const offsets = [4.5, -4.5];
-  for (let i = 0; i < offsets.length && i < arr.length; i++) {
+  const sPos = [-L - 10, -L - 14];
+  for (let i = 0; i < sPos.length && i < arr.length; i++) {
     const entry = arr[i];
     const aspect = entry.w / entry.h;
-    const [x, z] = toWorld(-L - 7, offsets[i]);
+    const [x, z] = toWorld(sPos[i], 9);
     const g = photoPanel(
       base + entry.file,
       aspect,
       ph,
       capLines(entry, entry.title || 'Patrimoine'),
     );
-    g.rotation.y = yaw;
+    g.rotation.y = faceAngle(vx, vz, x, z, apX, apZ);
     g.position.set(x, gy + 1.1 + ph / 2, z);
     scene.add(g);
   }

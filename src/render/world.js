@@ -90,6 +90,20 @@ function ringToShape(pts) {
   return shape;
 }
 
+// A pointed (ogival) gothic arch outline in the XY plane, base centred on the
+// origin: straight jambs up to hStraight, then two curves meeting at a point.
+// Used for the church's pointed windows and portal.
+function gothicArch(halfW, hStraight, hArc) {
+  const s = new THREE.Shape();
+  s.moveTo(-halfW, 0);
+  s.lineTo(-halfW, hStraight);
+  s.quadraticCurveTo(-halfW * 0.15, hStraight + hArc * 0.6, 0, hStraight + hArc);
+  s.quadraticCurveTo(halfW * 0.15, hStraight + hArc * 0.6, halfW, hStraight);
+  s.lineTo(halfW, 0);
+  s.lineTo(-halfW, 0);
+  return s;
+}
+
 function setColorAttr(geo, color) {
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 3);
@@ -466,46 +480,115 @@ function buildChurchInto(o) {
     roofGeos.push(rgeo);
   }
 
-  // A single neo-Gothic bell tower and tall slate spire over the FRONT
-  // (entrance) end, the way Eglise Sainte-Marie-Madeleine faces its square.
-  // Placing it at the front means the steeple greets the player on the parvis
-  // instead of hiding behind the nave, and the doorway below stays open.
-  const th = chapel ? 1.7 : 2.7;
-  const inset = th + 0.6;
-  const ftx = box.cx - box.ux * (box.L - inset);
-  const ftz = box.cz - box.uz * (box.L - inset);
-  const belfryBase = gy + wallH - 1.5;
-  const belfryH = chapel ? 6 : 14;
+  // ---- Front: the clocher-porche. On Eglise Sainte-Marie-Madeleine the bell
+  // tower IS the entrance and forms the whole west front, built in PALE
+  // limestone that contrasts with the darker schist nave. It carries a
+  // walk-through porch, a tall pointed window, a small round oculus, corner
+  // buttresses and pinnacles, and is capped by a dark octagonal slate spire.
+  // Chapels keep a simpler small belfry + spike.
+  const angU = Math.atan2(-box.uz, box.ux);
+  const angV = Math.atan2(-box.vz, box.vx);
+  const toW = (s, t) => [box.cx + box.ux * s + box.vx * t, box.cz + box.uz * s + box.vz * t];
+  const slabU = (du, dv, h, sC, tC, yC) => {
+    const g = new THREE.BoxGeometry(du, h, dv);
+    g.rotateY(angU);
+    const [wx, wz] = toW(sC, tC);
+    g.translate(wx, yC, wz);
+    return g;
+  };
+
+  if (chapel) {
+    const th = 1.7;
+    const sC = -box.L + th + 0.6;
+    const belfryBase = gy + wallH - 1.5;
+    const belfryH = 6;
+    const belfryTop = belfryBase + belfryH;
+    towerGeos.push(slabU(th * 2, th * 2, belfryH, sC, 0, belfryBase + belfryH / 2));
+    const spireH = 9;
+    const [fx, fz] = toW(sC, 0);
+    const cone = new THREE.ConeGeometry(th * 1.18, spireH, 8).toNonIndexed();
+    cone.rotateY(Math.PI / 8);
+    cone.translate(fx, belfryTop + spireH / 2, fz);
+    spireGeos.push(cone.getAttribute('position').array);
+    return;
+  }
+
+  const towerHalf = Math.min(Math.max(box.W * 0.82, 2.8), 4.4); // v half-width
+  const depth = 3.6; // u depth of the tower
+  const frontS = -box.L - 0.3; // front face plane, slightly proud of the nave
+  const sMid = frontS + depth / 2;
+  const porchH = 4.6;
+  const belfryBase = gy + wallH - 1.0;
+  const belfryH = 15;
   const belfryTop = belfryBase + belfryH;
-  const shaft = new THREE.BoxGeometry(th * 2, belfryH, th * 2);
-  shaft.translate(ftx, belfryBase + belfryH / 2, ftz);
-  towerGeos.push(shaft);
+  const towerH = belfryTop - gy;
 
-  // Slate broach spire: a slender octagonal cone, tall enough to read as the
-  // town steeple on the skyline.
-  const spireH = chapel ? 9 : 22;
-  const cone = new THREE.ConeGeometry(th * 1.18, spireH, 8).toNonIndexed();
-  cone.rotateY(Math.PI / 8);
-  cone.translate(ftx, belfryTop + spireH / 2, ftz);
-  spireGeos.push(cone.getAttribute('position').array);
+  // Two side piers of the porch-tower + a slim buttress at each front corner.
+  for (const sgn of [-1, 1]) {
+    towerGeos.push(slabU(depth, 1.2, towerH, sMid, sgn * (towerHalf - 0.6), gy + towerH / 2));
+    const buH = belfryBase - gy - 1.5;
+    towerGeos.push(slabU(1.6, 1.0, buH, frontS - 0.8, sgn * (towerHalf - 0.2), gy + buH / 2));
+    // Upper-stage side wall so the belfry reads as a closed box above the nave.
+    towerGeos.push(
+      slabU(depth, 0.8, belfryH, sMid, sgn * (towerHalf - 0.4), belfryBase + belfryH / 2),
+    );
+    const [cxp, czp] = toW(sMid, sgn * (towerHalf - 0.6));
+    colliders.push({ minX: cxp - 1.2, maxX: cxp + 1.2, minZ: czp - 1.2, maxZ: czp + 1.2 });
+  }
+  // Front face above the porch opening (carries the window + oculus).
+  const faceBaseY = gy + porchH;
+  const faceH = belfryTop - faceBaseY;
+  towerGeos.push(slabU(0.9, towerHalf * 2, faceH, frontS + 0.45, 0, faceBaseY + faceH / 2));
+  // Pale lintel across the top of the porch opening.
+  towerGeos.push(slabU(depth, towerHalf * 2, 0.8, sMid, 0, faceBaseY + 0.4));
+  // Rear belfry wall so the tower reads solid where it clears the roof.
+  towerGeos.push(
+    slabU(0.8, towerHalf * 2, belfryH, sMid + depth / 2 - 0.4, 0, belfryBase + belfryH / 2),
+  );
 
-  if (!chapel) {
-    // Four corner pinnacles around the belfry top.
-    for (const s1 of [-1, 1]) {
-      for (const s2 of [-1, 1]) {
-        const pin = new THREE.ConeGeometry(0.5, 3.4, 6).toNonIndexed();
-        pin.translate(ftx + s1 * th * 0.92, belfryTop + 1.7, ftz + s2 * th * 0.92);
-        spireGeos.push(pin.getAttribute('position').array);
-      }
+  // Four pale pinnacles at the tower-top corners.
+  for (const s1 of [-1, 1]) {
+    for (const s2 of [-1, 1]) {
+      const [px, pz] = toW(sMid + s1 * (depth / 2 - 0.3), s2 * (towerHalf - 0.3));
+      const pin = new THREE.ConeGeometry(0.55, 3.6, 6);
+      pin.translate(px, belfryTop + 1.8, pz);
+      towerGeos.push(pin);
     }
-    // A slate cross finial on the spire apex, so it clearly reads as a church.
-    const apexY = belfryTop + spireH;
-    const stem = new THREE.BoxGeometry(0.16, 2.2, 0.16);
-    stem.translate(ftx, apexY + 1.1, ftz);
-    const bar = new THREE.BoxGeometry(1.2, 0.16, 0.16);
-    bar.translate(ftx, apexY + 1.4, ftz);
-    spireGeos.push(stem.toNonIndexed().getAttribute('position').array);
-    spireGeos.push(bar.toNonIndexed().getAttribute('position').array);
+  }
+
+  // Dark octagonal slate spire on the belfry top, with a cross finial.
+  const spireH = 22;
+  const [fx, fz] = toW(sMid, 0);
+  const cone = new THREE.ConeGeometry(towerHalf * 0.98, spireH, 8).toNonIndexed();
+  cone.rotateY(Math.PI / 8);
+  cone.translate(fx, belfryTop + spireH / 2, fz);
+  spireGeos.push(cone.getAttribute('position').array);
+  const apexY = belfryTop + spireH;
+  const stem = new THREE.BoxGeometry(0.18, 2.4, 0.18);
+  stem.translate(fx, apexY + 1.2, fz);
+  const bar = new THREE.BoxGeometry(1.3, 0.18, 0.18);
+  bar.translate(fx, apexY + 1.5, fz);
+  spireGeos.push(stem.toNonIndexed().getAttribute('position').array);
+  spireGeos.push(bar.toNonIndexed().getAttribute('position').array);
+
+  // Glowing gothic openings on the pale front face: a tall pointed window and a
+  // small round oculus above it, plus two dark louvred belfry openings.
+  const [gwx, gwz] = toW(frontS - 0.05, 0);
+  const wShape = gothicArch(towerHalf * 0.62, 3.2, 1.7);
+  const wGeo = new THREE.ExtrudeGeometry(wShape, { depth: 0.2, bevelEnabled: false });
+  wGeo.rotateY(angV);
+  wGeo.translate(gwx, faceBaseY + 1.2, gwz);
+  decorMeshes.push(new THREE.Mesh(wGeo, new THREE.MeshBasicMaterial({ color: 0x28303f })));
+  const oc = new THREE.CylinderGeometry(0.85, 0.85, 0.25, 20);
+  oc.rotateZ(Math.PI / 2);
+  oc.rotateY(angU);
+  oc.translate(gwx, faceBaseY + 6.8, gwz);
+  decorMeshes.push(new THREE.Mesh(oc, new THREE.MeshBasicMaterial({ color: 0x28303f })));
+  for (const sgn of [-1, 1]) {
+    const lv = slabU(0.3, 1.0, 4.5, frontS + 0.1, sgn * 1.5, belfryBase + 5.5);
+    decorMeshes.push(
+      new THREE.Mesh(lv, new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.9 })),
+    );
   }
 }
 
@@ -1809,8 +1892,8 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   if (towerGeos.length) {
     const merged = mergeGeometries(towerGeos, false);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x9c9484,
-      roughness: 0.85,
+      color: 0xd8d0bd,
+      roughness: 0.8,
       metalness: 0.0,
     });
     const mesh = new THREE.Mesh(merged, mat);
@@ -1833,6 +1916,12 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     mesh.receiveShadow = true;
     group.add(mesh);
   }
+
+  // Church/chapel decorations are individual meshes and lights (not merged
+  // geometry): glowing stained glass and warm lights inside the nave, plus the
+  // exterior gothic openings on the clocher-porche. Add them straight to the
+  // group so they actually render.
+  for (const m of decorMeshes) group.add(m);
 
   // Church nave walls: their own mesh so real CC0 stone can be tiled over them
   // with the vertical-triplanar facade shader (world-space, so the long walls
@@ -1866,9 +1955,9 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2f3743,
-      roughness: 0.6,
-      metalness: 0.12,
+      color: 0x1b2129,
+      roughness: 0.96,
+      metalness: 0.0,
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geo, mat);
