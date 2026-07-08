@@ -728,6 +728,121 @@ function buildTrees(group, woods, groundY) {
   if (mesh) group.add(mesh);
 }
 
+// A tuft of grass blades on a transparent background, drawn once and reused as a
+// crossed-billboard so lawns and verges near the player read as real grass
+// instead of a flat aerial photo. No external asset.
+let _grassTex = null;
+function grassTexture() {
+  if (_grassTex) return _grassTex;
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  let s = 3;
+  const rnd = () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+  const base = size * 0.98;
+  for (let i = 0; i < 18; i++) {
+    const x0 = size * (0.15 + rnd() * 0.7);
+    const h = size * (0.5 + rnd() * 0.45);
+    const sway = (rnd() - 0.5) * size * 0.26;
+    const w = size * (0.032 + rnd() * 0.026);
+    const tipx = x0 + sway;
+    const tipy = base - h;
+    const midx = x0 + sway * 0.4;
+    const midy = base - h * 0.5;
+    const m = rnd();
+    const grd = g.createLinearGradient(0, base, 0, tipy);
+    grd.addColorStop(0, `rgb(${(52 + m * 32) | 0},${(92 + m * 34) | 0},${(38 + m * 18) | 0})`);
+    grd.addColorStop(1, `rgb(${(132 + m * 60) | 0},${(178 + m * 55) | 0},${(72 + m * 34) | 0})`);
+    g.strokeStyle = grd;
+    g.lineWidth = w;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(x0, base);
+    g.quadraticCurveTo(midx, midy, tipx, tipy);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _grassTex = tex;
+  return tex;
+}
+
+function grassGeo() {
+  const W = 0.9;
+  const H = 0.42;
+  const a = new THREE.PlaneGeometry(W, H);
+  a.translate(0, H / 2, 0);
+  const b = new THREE.PlaneGeometry(W, H);
+  b.rotateY(Math.PI / 2);
+  b.translate(0, H / 2, 0);
+  return mergeGeometries([a, b], false);
+}
+
+function instanceGrass(placements, groundY) {
+  if (!placements.length) return null;
+  const n = placements.length;
+  const mesh = new THREE.InstancedMesh(
+    grassGeo(),
+    new THREE.MeshStandardMaterial({
+      map: grassTexture(),
+      alphaTest: 0.35,
+      side: THREE.DoubleSide,
+      roughness: 1,
+      metalness: 0,
+    }),
+    n,
+  );
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const scl = new THREE.Vector3();
+  const pos = new THREE.Vector3();
+  const col = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    const p = placements[i];
+    q.setFromAxisAngle(up, fract01(Math.sin(i * 12.9898) * 43758.5453) * Math.PI * 2);
+    const sc = p.s * (0.55 + fract01(Math.sin(i * 7.13) * 1531.7) * 0.5);
+    scl.set(sc, sc * (0.8 + fract01(Math.sin(i * 3.7) * 917.1) * 0.6), sc);
+    pos.set(p.x, groundY(p.x, p.z) + 0.02, p.z);
+    m.compose(pos, q, scl);
+    mesh.setMatrixAt(i, m);
+    const b = 0.8 + fract01(Math.sin(i * 2.11) * 6521.3) * 0.35;
+    const y = (fract01(Math.sin(i * 1.27) * 2287.9) - 0.5) * 0.18;
+    col.setRGB(Math.min(1, b * (1 + y)), Math.min(1, b * 1.06), Math.min(1, b * (1 - y)));
+    mesh.setColorAt(i, col);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  return mesh;
+}
+
+// Scatter grass tufts across non-wooded green polygons, but only near the town
+// core (within `radius` of the origin) so the foreground lawns gain real detail
+// without flooding the whole map with instances.
+function buildGrass(group, grassPolys, groundY, radius = 320) {
+  const MAX = 16000;
+  const r2 = radius * radius;
+  const placements = [];
+  let seed = 101;
+  for (const gp of grassPolys) {
+    if (placements.length >= MAX) break;
+    const pts = scatterInPolygon(gp.ring, 2.1, seed++);
+    for (const p of pts) {
+      if (p.x * p.x + p.z * p.z > r2) continue;
+      placements.push(p);
+      if (placements.length >= MAX) break;
+    }
+  }
+  const mesh = instanceGrass(placements, groundY);
+  if (mesh) group.add(mesh);
+}
+
 // Instance individual mapped trees from projected [lon, lat] points.
 export function addTreePoints(scene, points, proj, groundY) {
   const placements = points.map((ll, i) => {
@@ -776,6 +891,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   const bCentroids = [];
   const colliders = [];
   const woods = [];
+  const grassPolys = [];
   const landmarks = { church: null, keep: null, oldtown: [] };
 
   // A few real old-town buildings get their street front skinned with a
@@ -896,6 +1012,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
       waterGeos.push(geo);
     } else if (f.k === 'green') {
       if (isWooded(f.t)) woods.push({ ring: pts, spacing: treeSpacing(f.t) });
+      else grassPolys.push({ ring: pts });
       if (skipGreen) continue;
       const shape = ringToShape(pts);
       if (!shape) continue;
@@ -1029,6 +1146,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   scene.add(group);
 
   buildTrees(group, woods, groundY);
+  buildGrass(group, grassPolys, groundY);
   buildChateau(group, groundY, colliders, landmarks);
 
   return {
