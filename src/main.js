@@ -71,7 +71,10 @@ app.appendChild(renderer.domElement);
 
 // ---- Scene, sky, fog ----
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbdd2ea, 500, 1900);
+// The town is small and dense, so the horizon is pulled in with haze. You see a
+// believable few hundred metres and the landmarks nearby, not the whole 3.4 km
+// map and the fields beyond, the way you cannot see across a real town.
+scene.fog = new THREE.Fog(0xc3d3e6, 140, 520);
 
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 4000);
 
@@ -140,7 +143,7 @@ gtao.updateGtaoMaterial({
   distanceExponent: 1.0,
   thickness: 1.2,
   scale: 1.0,
-  samples: 16,
+  samples: 8,
   distanceFallOff: 1.0,
   screenSpaceRadius: false,
 });
@@ -424,6 +427,14 @@ async function init() {
   startBtn.disabled = false;
   startBtn.textContent = 'Enter Châteaugiron';
   loadingEl.textContent = '';
+
+  // The sun and the town never move, so the shadow map only needs drawing once.
+  // Bake it on the next frame, then freeze it. This stops the renderer redrawing
+  // the whole 700k triangle town into the 4096 depth map every frame, which is
+  // the single biggest cost. The moving avatar does not cast into it (it carries
+  // a soft contact shadow instead); the still townsfolk keep their baked shadows.
+  renderer.shadowMap.needsUpdate = true;
+  renderer.shadowMap.autoUpdate = false;
 
   // Store projector + game internals for the HUD and for headless captures.
   window.__proj = proj;

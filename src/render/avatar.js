@@ -60,7 +60,10 @@ export class Avatar {
     const model = gltf.scene;
     model.traverse((o) => {
       if (o.isMesh) {
-        o.castShadow = true;
+        // The avatar moves, so it must not cast into the frozen shadow map (it
+        // would leave a ghost where it started). Its contact-shadow disc grounds
+        // it instead. It still receives the baked shadows as it walks through them.
+        o.castShadow = false;
         o.receiveShadow = true;
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         for (const m of mats) {
