@@ -1,5 +1,9 @@
 # Châteaugiron 3D
 
+[![CI](https://github.com/btessiau/chateaugiron-3d/actions/workflows/ci.yml/badge.svg)](https://github.com/btessiau/chateaugiron-3d/actions/workflows/ci.yml)
+[![Deploy to GitHub Pages](https://github.com/btessiau/chateaugiron-3d/actions/workflows/deploy.yml/badge.svg)](https://github.com/btessiau/chateaugiron-3d/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Walk the real town of [Châteaugiron](https://en.wikipedia.org/wiki/Ch%C3%A2teaugiron) (Brittany, France) at true 1:1 scale, in your browser. The whole historic core is built automatically from free open data and rendered with three.js: real terrain relief, real slate and granite textures, pitched roofs, a walkable character in first or third person, and two landmarks you can step inside.
 
 ![Châteaugiron skyline rendered in the browser](docs/preview.png)
