@@ -14,6 +14,7 @@ import {
   ringCentroid,
   nearestPoint,
   classifyLandmark,
+  buildingHeight,
 } from './map2d.js';
 
 const id = (lon, lat) => [lon, lat]; // identity projector: input is already metres
@@ -254,5 +255,23 @@ describe('classifyLandmark', () => {
     expect(classifyLandmark({ name: 'Les Halles' })).toBe('halles');
     expect(classifyLandmark({ amenity: 'townhall' })).toBe('townhall');
     expect(classifyLandmark({ name: 'Mairie de Châteaugiron' })).toBe('townhall');
+  });
+});
+
+describe('buildingHeight', () => {
+  it('makes landmarks tall so they stand out', () => {
+    expect(buildingHeight({ historic: 'castle' })).toBe(22);
+    expect(buildingHeight({ building: 'church' })).toBe(17);
+    expect(buildingHeight({ name: 'Les Halles' })).toBe(11);
+    expect(buildingHeight({ amenity: 'townhall' })).toBe(11);
+  });
+  it('uses real eaves height plus half the roof rise', () => {
+    expect(buildingHeight({ building: 'house', height: '4', 'roof:height': '3' })).toBe(5.5);
+  });
+  it('falls back to levels then a default, and clamps', () => {
+    expect(buildingHeight({ building: 'house', 'building:levels': '2' })).toBe(6);
+    expect(buildingHeight({ building: 'house' })).toBe(3.2);
+    expect(buildingHeight(null)).toBe(3.2);
+    expect(buildingHeight({ building: 'house', height: '80' })).toBe(20);
   });
 });

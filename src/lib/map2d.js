@@ -220,3 +220,20 @@ export function classifyLandmark(tags) {
   if (tags.amenity === 'townhall' || name.includes('mairie')) return 'townhall';
   return null;
 }
+
+// Height in metres used to extrude a building into the 2.5D view. Landmarks are
+// made deliberately tall so they stand out like a town's gyms; ordinary houses
+// use the real baked eaves height plus part of the roof rise.
+export function buildingHeight(tags) {
+  const lm = classifyLandmark(tags);
+  if (lm === 'chateau') return 22;
+  if (lm === 'church') return 17;
+  if (lm === 'halles') return 11;
+  if (lm === 'townhall') return 11;
+  const eaves =
+    parseFloat(tags && tags.height) ||
+    (parseFloat(tags && tags['building:levels']) || 0) * 3 ||
+    3.2;
+  const roofRise = parseFloat(tags && tags['roof:height']) || 0;
+  return Math.max(2.5, Math.min(eaves + roofRise * 0.5, 20));
+}
