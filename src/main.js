@@ -3,7 +3,6 @@
 // walk it in first person.
 
 import * as THREE from 'three';
-import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
@@ -77,36 +76,49 @@ const scene = new THREE.Scene();
 // The town is small and dense, so the horizon is pulled in with haze. You see a
 // believable few hundred metres and the landmarks nearby, not the whole 3.4 km
 // map and the fields beyond, the way you cannot see across a real town.
-scene.fog = new THREE.Fog(0xb4c6d6, 150, 560);
+scene.fog = new THREE.Fog(0xdcecf5, 190, 600);
 
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 4000);
 
-// Physical sky dome with a sun disc. The sun direction is shared with the
-// directional light below so shadows line up with the visible sun.
-const SUN_ELEV = 42;
-const SUN_AZIM = 138;
+// Clean cartoon sky: a soft vertical gradient dome, deep pastel blue overhead
+// fading to a pale horizon. No photographic sun disc. The sun direction is
+// still used to light the town so forms read, it just is not drawn. Raised high
+// so the toy town sits under a soft, mostly top-down light with short shadows.
+const SUN_ELEV = 58;
+const SUN_AZIM = 135;
 const sunDir = sunPosition(SUN_ELEV, SUN_AZIM, 1);
-const sky = new Sky();
-sky.scale.setScalar(10000);
-sky.material.uniforms.turbidity.value = 3.0;
-sky.material.uniforms.rayleigh.value = 3.2;
-sky.material.uniforms.mieCoefficient.value = 0.006;
-sky.material.uniforms.mieDirectionalG.value = 0.8;
-sky.material.uniforms.sunPosition.value.set(sunDir.x, sunDir.y, sunDir.z);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  depthWrite: false,
+  fog: false,
+  uniforms: {
+    uTop: { value: new THREE.Color(0x5aa9e6) },
+    uHorizon: { value: new THREE.Color(0xdcecf5) },
+  },
+  vertexShader: `
+    varying vec3 vDir;
+    void main() {
+      vDir = normalize(position);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    varying vec3 vDir;
+    uniform vec3 uTop;
+    uniform vec3 uHorizon;
+    void main() {
+      float h = clamp(vDir.y * 1.2, 0.0, 1.0);
+      gl_FragColor = vec4(mix(uHorizon, uTop, pow(h, 0.55)), 1.0);
+    }`,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(3200, 32, 16), skyMat);
+sky.renderOrder = -1;
 scene.add(sky);
 
-// Bake the sky into an environment map, used only as a reflection for the
-// water below (not for scene lighting, which would blow out the buildings).
-const pmrem = new THREE.PMREMGenerator(renderer);
-pmrem.compileEquirectangularShader();
-const skyEnv = pmrem.fromScene(sky, 0, 0.1, 100000).texture;
-pmrem.dispose();
-
 // ---- Lights ----
-const hemi = new THREE.HemisphereLight(0xc4d8ff, 0x8a8168, 1.1);
+const hemi = new THREE.HemisphereLight(0xc4d8ff, 0x8a8168, 1.7);
 scene.add(hemi);
 
-const sun = new THREE.DirectionalLight(0xfff1dd, 2.6);
+const sun = new THREE.DirectionalLight(0xfff4e6, 2.0);
 sun.position.set(sunDir.x * 700, sunDir.y * 700, sunDir.z * 700);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
@@ -121,7 +133,7 @@ scene.add(sun.target);
 // Soft sky fill from the shaded side so north faces and foliage undersides do
 // not read as black. No shadows and low intensity, so it lifts the dark sides
 // without flattening the sunlit look.
-const fill = new THREE.DirectionalLight(0xaec6ea, 0.66);
+const fill = new THREE.DirectionalLight(0xaec6ea, 0.9);
 fill.position.set(-sunDir.x * 600, 420, -sunDir.z * 600);
 scene.add(fill);
 
@@ -142,10 +154,10 @@ composer.addPass(new RenderPass(scene, camera));
 const gtao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
 gtao.output = GTAOPass.OUTPUT.Default;
 gtao.updateGtaoMaterial({
-  radius: 0.75,
+  radius: 0.5,
   distanceExponent: 1.0,
-  thickness: 1.2,
-  scale: 1.0,
+  thickness: 1.0,
+  scale: 0.7,
   samples: 8,
   distanceFallOff: 1.0,
   screenSpaceRadius: false,
@@ -154,23 +166,22 @@ composer.addPass(gtao);
 
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.16,
-  0.5,
-  0.9,
+  0.05,
+  0.4,
+  0.95,
 );
 composer.addPass(bloom);
 
-// A restrained photographic grade: a warm sunlit white balance, a little more
-// colour and contrast so the town stops looking hazy and flat, and a soft
-// vignette that draws the eye to the centre the way a real lens falls off at
-// the edges. Kept subtle so it reads as a camera, not a filter.
+// A light pastel grade: just a small saturation lift so the flat toy colours
+// pop, with neutral white balance, no added contrast and no vignette. Kept
+// clean so the town reads as a bright painted model, not a photograph.
 const GradeShader = {
   uniforms: {
     tDiffuse: { value: null },
-    uSaturation: { value: 1.14 },
-    uContrast: { value: 1.07 },
-    uWarm: { value: new THREE.Vector3(1.035, 1.0, 0.955) },
-    uVignette: { value: 0.82 },
+    uSaturation: { value: 1.16 },
+    uContrast: { value: 1.0 },
+    uWarm: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
+    uVignette: { value: 1.0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -253,32 +264,14 @@ async function init() {
   // Let the browser paint the loading text before the heavy build.
   await new Promise((r) => setTimeout(r, 20));
 
-  // Real aerial orthophoto for the ground (IGN). Optional. A wide, softer photo
-  // covers the whole terrain, and a sharper photo of the town core is draped on
-  // top so the ground the player actually walks on holds detail up close.
-  const loadTex = (name) =>
-    new Promise((resolve) => {
-      new THREE.TextureLoader().load(
-        `${import.meta.env.BASE_URL}textures/${name}`,
-        (t) => {
-          t.colorSpace = THREE.SRGBColorSpace;
-          t.anisotropy = 16;
-          resolve(t);
-        },
-        undefined,
-        () => resolve(null),
-      );
-    });
-  const ortho = await loadTex('ortho.jpg');
-  const orthoCore = await loadTex('ortho-core.jpg');
-  if (!ortho) console.warn('No ortho texture, using plain ground.');
-
-  const world = buildWorld(scene, data, proj, hf, { skipGreen: !!ortho });
+  // Flat cartoon ground: no aerial photo. The terrain mesh follows the real
+  // heightfield so the relief is right, but it is painted a single soft grass
+  // green, like a painted tabletop model. OSM greens, roads and water are drawn
+  // on top by buildWorld.
+  const world = buildWorld(scene, data, proj, hf, { skipGreen: false });
   cullables = world.cullables;
-  if (hf) {
-    buildTerrain(scene, hf, ortho);
-    if (orthoCore) buildTerrain(scene, hf, orthoCore, { size: 1500 });
-  } else buildGround(scene, world.bounds);
+  if (hf) buildTerrain(scene, hf);
+  else buildGround(scene, world.bounds);
 
   // North-up minimap built once from the projected town features.
   try {
@@ -288,8 +281,9 @@ async function init() {
     minimap = null;
   }
 
-  // Animated water for the etang and streams: a low-roughness surface that
-  // reflects the baked sky environment and catches a sun glint.
+  // Flat cartoon water for the etang and streams: a clean pastel blue with a
+  // faint ripple in the normal map, no sky reflection, so it reads as a painted
+  // pond on the model rather than a mirror.
   if (world.waterGeo) {
     const normals = new THREE.TextureLoader().load(
       `${import.meta.env.BASE_URL}textures/waternormals.jpg`,
@@ -298,15 +292,13 @@ async function init() {
     normals.repeat.set(0.12, 0.12);
     waterNormals = normals;
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x183d52,
-      roughness: 0.06,
+      color: 0x5bb3d6,
+      roughness: 0.35,
       metalness: 0.0,
       normalMap: normals,
-      normalScale: new THREE.Vector2(0.45, 0.45),
-      envMap: skyEnv,
-      envMapIntensity: 0.8,
+      normalScale: new THREE.Vector2(0.18, 0.18),
       transparent: true,
-      opacity: 0.94,
+      opacity: 0.9,
     });
     water = new THREE.Mesh(world.waterGeo, mat);
     water.receiveShadow = true;

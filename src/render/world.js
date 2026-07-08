@@ -1992,7 +1992,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
 
   if (greenGeos.length) {
     const merged = mergeGeometries(greenGeos, false);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x5c7f45, roughness: 1.0, metalness: 0 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0x77b04f, roughness: 1.0, metalness: 0 });
     const mesh = new THREE.Mesh(merged, mat);
     mesh.receiveShadow = true;
     group.add(mesh);
@@ -2120,7 +2120,7 @@ export function buildTerrain(scene, hf, texture = null, opts = {}) {
   geo.computeVertexNormals();
   const mat = texture
     ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.97, metalness: 0 })
-    : new THREE.MeshStandardMaterial({ color: 0x6f7551, roughness: 1.0, metalness: 0 });
+    : new THREE.MeshStandardMaterial({ color: 0x8cbf6a, roughness: 1.0, metalness: 0 });
   if (texture) addGroundDetail(mat, overlay ? half : null);
   if (overlay) {
     mat.polygonOffset = true;
@@ -2198,7 +2198,7 @@ export function buildGround(scene, bounds) {
   const size = Math.max(w, h, 800);
   const geo = new THREE.PlaneGeometry(size, size);
   geo.rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x6d7353, roughness: 1.0, metalness: 0 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0x8cbf6a, roughness: 1.0, metalness: 0 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(cx, 0, cz);
   mesh.receiveShadow = true;
