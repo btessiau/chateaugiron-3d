@@ -101,3 +101,34 @@ export function benchSpots(features, project, perPark = 2) {
   }
   return out;
 }
+
+// Area of a polygon ring in square metres (shoelace, absolute).
+export function ringArea(ring) {
+  if (!Array.isArray(ring) || ring.length < 3) return 0;
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, n1] = ring[i];
+    const [x2, n2] = ring[(i + 1) % ring.length];
+    a += x1 * n2 - x2 * n1;
+  }
+  return Math.abs(a) / 2;
+}
+
+// Little shrubs scattered through the garden-sized greens between the houses. A
+// per-green seed keeps them stable, and very small or very large greens (the
+// open parks and the étang basin) are skipped so bushes read as garden planting
+// rather than dots on a field or on the pond.
+export function bushSpots(features, project, minArea = 40, maxArea = 8000) {
+  const out = [];
+  if (!Array.isArray(features)) return out;
+  for (const f of features) {
+    if (!f || f.k !== 'green' || !Array.isArray(f.g)) continue;
+    const ring = f.g.map((p) => project(p[0], p[1]));
+    const area = ringArea(ring);
+    if (area < minArea || area > maxArea) continue;
+    const count = Math.max(1, Math.min(8, Math.round(area / 500)));
+    const seed = (seedFrom((f.t && f.t.name) || String(f.g[0])) ^ 0x9e3779b9) >>> 0;
+    for (const p of scatterInRing(ring, count, seed)) out.push(p);
+  }
+  return out;
+}

@@ -30,7 +30,7 @@ import {
   MARKER_COLOR,
 } from './map2d/render2d.js';
 import { drawTrainer } from './map2d/sprite.js';
-import { treeSpots, lampSpots, benchSpots } from './lib/props2d.js';
+import { treeSpots, lampSpots, benchSpots, bushSpots } from './lib/props2d.js';
 
 const PLAYER_RADIUS = 0.6;
 const STRIDE = 0.42; // metres per walk-frame flip
@@ -128,6 +128,7 @@ async function main() {
   }
   const props = {
     trees: treeSpots(treePts, project),
+    bushes: bushSpots(data.features, project),
     lamps: lampSpots(prepared.roads),
     benches: benchSpots(data.features, project),
   };

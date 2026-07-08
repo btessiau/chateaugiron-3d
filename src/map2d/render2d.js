@@ -41,6 +41,9 @@ const TREE_LEAF = '#6cc05a';
 const TREE_LEAF_SH = '#54a848';
 const TREE_LEAF_HI = '#8bd472';
 const TREE_LEAF_EDGE = 'rgba(60,95,45,0.5)';
+const BUSH_LEAF = '#6bbb54';
+const BUSH_LEAF_SH = '#4f9c42';
+const BUSH_LEAF_HI = '#8ad06f';
 const LAMP_POST = '#5f656e';
 const LAMP_GLOW = '#ffe0a0';
 const LAMP_GLOW_EDGE = '#e6b45a';
@@ -300,6 +303,34 @@ function drawLamp(ctx, px, py, ppm) {
   ctx.stroke();
 }
 
+// A little shrub: a soft ground shadow and a few overlapping green lobes, lower
+// and rounder than a tree, with no trunk.
+function drawBush(ctx, px, py, ppm) {
+  const r = Math.max(2.2, ppm * 0.5);
+  ctx.fillStyle = PROP_SHADOW;
+  ctx.beginPath();
+  ctx.ellipse(px, py + r * 0.45, r * 1.25, r * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = BUSH_LEAF_SH;
+  ctx.beginPath();
+  ctx.arc(px, py - r * 0.15, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = BUSH_LEAF;
+  ctx.beginPath();
+  ctx.arc(px - r * 0.72, py, r * 0.68, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(px + r * 0.72, py, r * 0.68, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(px, py - r * 0.7, r * 0.78, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = BUSH_LEAF_HI;
+  ctx.beginPath();
+  ctx.arc(px - r * 0.3, py - r * 0.6, r * 0.34, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 // A park bench: shadow, a raised seat slab and a thin backrest behind it.
 function drawBench(ctx, px, py, ppm) {
   const w = Math.max(6, 1.8 * ppm);
@@ -328,6 +359,8 @@ export function drawProps(ctx, props, cam, W, H) {
 
   const items = [];
   for (const t of props.trees) if (vis(t.x, t.n)) items.push({ k: 0, x: t.x, n: t.n });
+  if (ppm >= 4 && props.bushes)
+    for (const bu of props.bushes) if (vis(bu.x, bu.n)) items.push({ k: 3, x: bu.x, n: bu.n });
   if (ppm >= 5)
     for (const l of props.lamps) if (vis(l.x, l.n)) items.push({ k: 1, x: l.x, n: l.n });
   if (ppm >= 6)
@@ -341,7 +374,8 @@ export function drawProps(ctx, props, cam, W, H) {
     const py = sy(it.n);
     if (it.k === 0) drawTree(ctx, px, py, ppm);
     else if (it.k === 1) drawLamp(ctx, px, py, ppm);
-    else drawBench(ctx, px, py, ppm);
+    else if (it.k === 2) drawBench(ctx, px, py, ppm);
+    else drawBush(ctx, px, py, ppm);
   }
 }
 

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { treeSpots, lampSpots, pointInPolygon, scatterInRing, benchSpots } from './props2d.js';
+import {
+  treeSpots,
+  lampSpots,
+  pointInPolygon,
+  scatterInRing,
+  benchSpots,
+  ringArea,
+  bushSpots,
+} from './props2d.js';
 
 // A simple projector for tests: identity-ish, lon->x, lat->n.
 const project = (lon, lat) => [lon * 10, lat * 10];
@@ -154,5 +162,63 @@ describe('benchSpots', () => {
   it('seeds from coordinates when a park has no name', () => {
     const feats = [park({ leisure: 'park' })];
     expect(benchSpots(feats, proj)).toEqual(benchSpots(feats, proj));
+  });
+});
+
+describe('ringArea', () => {
+  it('measures a polygon area with the shoelace formula', () => {
+    expect(ringArea(SQUARE)).toBe(100);
+    expect(
+      ringArea([
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ]),
+    ).toBe(12);
+  });
+  it('returns 0 for a degenerate ring', () => {
+    expect(ringArea(null)).toBe(0);
+    expect(ringArea([[0, 0]])).toBe(0);
+  });
+});
+
+describe('bushSpots', () => {
+  const proj = (lon, lat) => [lon, lat];
+  const green = (side) => ({
+    k: 'green',
+    g: [
+      [0, 0],
+      [side, 0],
+      [side, side],
+      [0, side],
+      [0, 0],
+    ],
+  });
+
+  it('returns [] for a non-array', () => {
+    expect(bushSpots(null, proj)).toEqual([]);
+  });
+
+  it('scatters bushes inside a garden-sized green', () => {
+    const spots = bushSpots([green(30)], proj); // 900 m2
+    expect(spots.length).toBeGreaterThanOrEqual(1);
+    expect(spots.every((p) => pointInPolygon(p.x, p.n, green(30).g))).toBe(true);
+  });
+
+  it('skips greens that are too small or too large, and non-greens', () => {
+    expect(bushSpots([green(5)], proj)).toEqual([]); // 25 m2, under minArea
+    expect(bushSpots([green(200)], proj)).toEqual([]); // 40000 m2, over maxArea
+    expect(bushSpots([{ k: 'building', g: green(30).g }], proj)).toEqual([]);
+  });
+
+  it('is deterministic for the same input', () => {
+    expect(bushSpots([green(40)], proj)).toEqual(bushSpots([green(40)], proj));
+  });
+
+  it('seeds from the green name when present', () => {
+    const named = { ...green(40), t: { name: 'Jardin du Château' } };
+    const spots = bushSpots([named], proj);
+    expect(spots.length).toBeGreaterThanOrEqual(1);
   });
 });
