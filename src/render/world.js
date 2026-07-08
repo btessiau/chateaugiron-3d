@@ -565,10 +565,20 @@ function buildChateau(group, groundY, colliders, landmarks = null) {
     roughness: 0.92,
     metalness: 0.0,
   });
+  const slateTex = tiledTexture('roof-slate.jpg');
+  slateTex.repeat.set(8, 3);
   const slate = new THREE.MeshStandardMaterial({
-    color: 0x2f3743,
+    map: slateTex,
+    color: 0xbfc6cf,
     roughness: 0.6,
     metalness: 0.12,
+  });
+  const turretTex = tiledTexture('castle-wall.jpg');
+  turretTex.repeat.set(4, 3);
+  const turretStone = new THREE.MeshStandardMaterial({
+    map: turretTex,
+    roughness: 0.95,
+    metalness: 0.0,
   });
 
   // Round keep (donjon), built as a faceted wall with a doorway so the great
@@ -654,7 +664,7 @@ function buildChateau(group, groundY, colliders, landmarks = null) {
     [-79, 6],
   ]) {
     const tgy = groundY(tx, tz);
-    addTurret(group, tx, tz, tgy, 3.1, 15, 8, darkStone, slate);
+    addTurret(group, tx, tz, tgy, 3.1, 15, 8, turretStone, slate);
     colliders.push({ minX: tx - 3.4, maxX: tx + 3.4, minZ: tz - 3.4, maxZ: tz + 3.4 });
   }
 }
