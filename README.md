@@ -18,6 +18,7 @@ Walk the real town of [Châteaugiron](https://en.wikipedia.org/wiki/Ch%C3%A2teau
 - Gives buildings pitched slate roofs, stone chimneys, and lit windows, with a Breton palette.
 - Lets you walk it in first or third person with a real human character, run, jump, sun, shadows, sky and reflective water.
 - Two landmarks are enterable: the church of Sainte-Marie-Madeleine (stone nave, pews, altar, stained glass) and the château keep (spiral stair, arrow slits). Both hold real photos from Wikimedia Commons.
+- Gathers a small heritage trail on the church square: credited real photos of Les Halles and an old house on rue d'Yaigne, beside a granite war memorial carved with the town's real dedication.
 - Fills the streets with life: trees, grass, townsfolk, parked cars, street lamps, birds, and an ambient sound bed.
 - Shows real street photographs in place (press `P`) from Panoramax, plus a minimap and compass.
 
