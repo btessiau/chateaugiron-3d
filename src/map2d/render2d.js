@@ -22,6 +22,10 @@ const B_SHADOW = 'rgba(40,30,22,0.16)';
 // other faces are shaded so each block reads as a little 3D box.
 const WALL_FRONT = '#f2e9d7';
 const WALL_SIDE = '#dccdb4';
+const DOOR = '#6f4d33';
+const DOOR_EDGE = '#47301d';
+const WIN_GLASS = '#cfe6f4';
+const WIN_EDGE = '#8b7a5f';
 // How tall a real metre draws, relative to the map scale. A touch under 1 keeps
 // the dense old town readable while still giving buildings real height.
 const VSCALE = 0.85;
@@ -138,6 +142,56 @@ function tracePath(ctx, pts, sx, sy) {
   for (let i = 1; i < pts.length; i++) ctx.lineTo(sx(pts[i][0]), sy(pts[i][1]));
 }
 
+// A point on a facade in its own frame: u runs along the ground edge, v rises
+// vertically up the wall. Used to place doors and windows so they slant with
+// the building.
+function facadePoint(f, u, v) {
+  return [f.x0 + f.ex * u, f.y0 + f.ey * u - v];
+}
+
+function faceRect(ctx, f, u0, u1, v0, v1) {
+  const a = facadePoint(f, u0, v0);
+  const b = facadePoint(f, u1, v0);
+  const c = facadePoint(f, u1, v1);
+  const d = facadePoint(f, u0, v1);
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+  ctx.lineTo(c[0], c[1]);
+  ctx.lineTo(d[0], d[1]);
+  ctx.closePath();
+}
+
+// A centred door at the base of the front facade, with a window either side.
+function drawFacadeDetail(ctx, f, hpx) {
+  const L = f.L;
+  ctx.lineWidth = 1;
+  const dw = Math.max(5, Math.min(L * 0.22, 12));
+  const dh = Math.min(hpx * 0.62, dw * 2);
+  const uc = L / 2;
+  faceRect(ctx, f, uc - dw / 2, uc + dw / 2, 0, dh);
+  ctx.fillStyle = DOOR;
+  ctx.fill();
+  ctx.strokeStyle = DOOR_EDGE;
+  ctx.stroke();
+
+  if (L > 30 && hpx > 16) {
+    const ww = Math.max(4, Math.min(L * 0.13, 8));
+    const wh = ww * 1.1;
+    const v0 = Math.min(hpx * 0.42, hpx - wh - 3);
+    if (v0 > 3) {
+      for (const u of [L * 0.24, L * 0.76]) {
+        if (Math.abs(u - uc) < dw / 2 + ww) continue;
+        faceRect(ctx, f, u - ww / 2, u + ww / 2, v0, v0 + wh);
+        ctx.fillStyle = WIN_GLASS;
+        ctx.fill();
+        ctx.strokeStyle = WIN_EDGE;
+        ctx.stroke();
+      }
+    }
+  }
+}
+
 // Draw the visible slice of the town, centred on the camera (in metres).
 export function drawWorld(ctx, prepared, cam, W, H) {
   const ppm = cam.ppm;
@@ -207,10 +261,13 @@ export function drawWorld(ctx, prepared, cam, W, H) {
   }
 
   // Buildings as 2.5D blocks: a height-scaled ground shadow, cream facade walls
-  // that rise up-screen (south face lit, other faces shaded), then the coloured
-  // roof on top. Sorted north-to-south so nearer walls and roofs overlap right.
+  // that rise up-screen (south face lit, other faces shaded), a door and windows
+  // on the front, then the coloured roof on top. Sorted north-to-south so nearer
+  // walls and roofs overlap right.
   const outline = ppm > 3;
-  ctx.lineWidth = Math.max(0.8, ppm * 0.12);
+  const lw = Math.max(0.8, ppm * 0.12);
+  const detail = ppm > 4.5;
+  ctx.lineWidth = lw;
   for (const b of prepared.buildings) {
     if (!inView(b.bbox, cam, hw, hh)) continue;
     const n = b.pts.length;
@@ -238,7 +295,10 @@ export function drawWorld(ctx, prepared, cam, W, H) {
     ctx.fill();
 
     // Facade walls: one quad per footprint edge, from the ground up to the eaves.
+    // Track the longest south-facing edge to hang the front door on.
+    ctx.lineWidth = lw;
     ctx.strokeStyle = B_OUTLINE;
+    let front = null;
     for (let i = 0; i < n - 1; i++) {
       const [x0, y0] = base[i];
       const [x1, y1] = base[i + 1];
@@ -250,7 +310,8 @@ export function drawWorld(ctx, prepared, cam, W, H) {
         nx = -nx;
         ny = -ny;
       }
-      ctx.fillStyle = ny > 0 ? b.wallFront : b.wallSide; // normal south = lit front
+      const faceFront = ny > 0; // normal points south = lit front
+      ctx.fillStyle = faceFront ? b.wallFront : b.wallSide;
       ctx.beginPath();
       ctx.moveTo(x0, y0);
       ctx.lineTo(x1, y1);
@@ -259,10 +320,22 @@ export function drawWorld(ctx, prepared, cam, W, H) {
       ctx.closePath();
       ctx.fill();
       if (outline) ctx.stroke();
+      if (faceFront) {
+        const L = Math.hypot(x1 - x0, y1 - y0);
+        if (L > 1 && (!front || L > front.L))
+          front = { x0, y0, x1, y1, L, ex: (x1 - x0) / L, ey: (y1 - y0) / L };
+      }
+    }
+
+    // Door and windows on the main front facade (only ordinary houses, zoomed in).
+    if (detail && front && !b.lm && hpx > 14 && front.L > 16) {
+      drawFacadeDetail(ctx, front, hpx);
     }
 
     // Roof: the footprint raised by the wall height, in the building's colour.
+    ctx.lineWidth = lw;
     ctx.fillStyle = b.roof;
+    ctx.strokeStyle = B_OUTLINE;
     ctx.beginPath();
     ctx.moveTo(base[0][0], base[0][1] - hpx);
     for (let i = 1; i < n; i++) ctx.lineTo(base[i][0], base[i][1] - hpx);
