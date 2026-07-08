@@ -558,6 +558,54 @@ function buildKeepInterior(group, o) {
 // The Chateau de Chateaugiron: its signature is a tall round crenellated keep
 // (the "grosse tour"). Placed at the real keep location, with two pepperpot
 // turrets on the logis. Authored geometry, verified by screenshot.
+// A granite war memorial (monument aux morts) for the church square, the kind
+// every French town has. A stepped plinth, a tapered square shaft and a small
+// domed top, in light granite. Placed to one side of the church forecourt on
+// the true ground, with a small collider so the player walks around it. Modelled
+// after the real Chateaugiron monument (photo: GO69, CC0, Wikimedia Commons).
+function buildWarMemorial(group, church, groundY, colliders) {
+  if (!church || !church.box) return;
+  const { cx, cz, ux, uz, vx, vz, L } = church.box;
+  const px = cx + ux * (-L - 9) + vx * -9;
+  const pz = cz + uz * (-L - 9) + vz * -9;
+  const gy = groundY(px, pz);
+  const granite = new THREE.MeshStandardMaterial({
+    color: 0x9c988f,
+    roughness: 0.82,
+    metalness: 0.0,
+  });
+  const graniteDark = new THREE.MeshStandardMaterial({
+    color: 0x878379,
+    roughness: 0.85,
+    metalness: 0.0,
+  });
+  const mem = new THREE.Group();
+  const add = (geo, y, mat) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.y = y;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    mem.add(m);
+  };
+  // Stepped base.
+  add(new THREE.BoxGeometry(3.2, 0.35, 3.2), 0.175, graniteDark);
+  add(new THREE.BoxGeometry(2.5, 0.35, 2.5), 0.525, granite);
+  add(new THREE.BoxGeometry(1.9, 0.4, 1.9), 0.9, granite);
+  // Inscribed plinth (dado) where the names are carved on the real monument.
+  add(new THREE.BoxGeometry(1.35, 1.15, 1.35), 1.675, granite);
+  // Tapered square shaft (a four-sided prism from a low-segment cylinder).
+  const shaft = new THREE.CylinderGeometry(0.42, 0.62, 3.2, 4);
+  shaft.rotateY(Math.PI / 4);
+  add(shaft, 2.25 + 1.6, granite);
+  // Small drum and a domed cap, echoing the rotunda top of the real memorial.
+  add(new THREE.CylinderGeometry(0.5, 0.55, 0.5, 12), 5.45 + 0.25, graniteDark);
+  add(new THREE.ConeGeometry(0.48, 0.66, 14), 5.95 + 0.33, granite);
+  mem.position.set(px, gy, pz);
+  mem.rotation.y = Math.atan2(-ux, -uz); // a flat face toward the approach
+  group.add(mem);
+  colliders.push({ minX: px - 1.05, maxX: px + 1.05, minZ: pz - 1.05, maxZ: pz + 1.05 });
+}
+
 function buildChateau(group, groundY, colliders, landmarks = null) {
   const stone = new THREE.MeshStandardMaterial({ color: 0x8f887b, roughness: 0.9, metalness: 0.0 });
   const darkStone = new THREE.MeshStandardMaterial({
@@ -1560,6 +1608,7 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
   buildChimneys(group, chimneySpecs);
   buildCars(group, roadLines, groundY);
   buildChateau(group, groundY, colliders, landmarks);
+  buildWarMemorial(group, landmarks.church, groundY, colliders);
 
   return {
     bounds,
