@@ -10,7 +10,7 @@ import { orientedBox, gableRoofPositions, hipRoofPositions } from '../lib/roof.j
 import { chimneyFor } from '../lib/chimney.js';
 import { scatterInPolygon } from '../lib/scatter.js';
 import { lampPointsAlong } from '../lib/streetlamps.js';
-import { isChurch, isChapel, towerPlacement, pyramidPositions } from '../lib/landmark.js';
+import { isChurch, isChapel } from '../lib/landmark.js';
 import {
   roadWidth,
   roadColor,
@@ -405,27 +405,47 @@ function buildChurchInto(o) {
     roofGeos.push(rgeo);
   }
 
-  // Bell tower + spire, rising from the roof line so the nave stays clear.
-  const t = towerPlacement(box);
-  const towerH = chapel ? 9 : 16;
-  const towerBase = gy + wallH - 1;
-  const tgeo = new THREE.BoxGeometry(t.half * 2, towerH, t.half * 2);
-  tgeo.translate(t.x, towerBase + towerH / 2, t.z);
-  towerGeos.push(tgeo);
+  // A single neo-Gothic bell tower and tall slate spire over the FRONT
+  // (entrance) end, the way Eglise Sainte-Marie-Madeleine faces its square.
+  // Placing it at the front means the steeple greets the player on the parvis
+  // instead of hiding behind the nave, and the doorway below stays open.
+  const th = chapel ? 1.7 : 2.7;
+  const inset = th + 0.6;
+  const ftx = box.cx - box.ux * (box.L - inset);
+  const ftz = box.cz - box.uz * (box.L - inset);
+  const belfryBase = gy + wallH - 1.5;
+  const belfryH = chapel ? 6 : 14;
+  const belfryTop = belfryBase + belfryH;
+  const shaft = new THREE.BoxGeometry(th * 2, belfryH, th * 2);
+  shaft.translate(ftx, belfryBase + belfryH / 2, ftz);
+  towerGeos.push(shaft);
 
-  const spireH = chapel ? 6 : 15;
-  const sp = pyramidPositions(
-    t.x,
-    t.z,
-    towerBase + towerH,
-    t.half * 1.05,
-    spireH,
-    box.ux,
-    box.uz,
-    box.vx,
-    box.vz,
-  );
-  spireGeos.push(sp);
+  // Slate broach spire: a slender octagonal cone, tall enough to read as the
+  // town steeple on the skyline.
+  const spireH = chapel ? 9 : 22;
+  const cone = new THREE.ConeGeometry(th * 1.18, spireH, 8).toNonIndexed();
+  cone.rotateY(Math.PI / 8);
+  cone.translate(ftx, belfryTop + spireH / 2, ftz);
+  spireGeos.push(cone.getAttribute('position').array);
+
+  if (!chapel) {
+    // Four corner pinnacles around the belfry top.
+    for (const s1 of [-1, 1]) {
+      for (const s2 of [-1, 1]) {
+        const pin = new THREE.ConeGeometry(0.5, 3.4, 6).toNonIndexed();
+        pin.translate(ftx + s1 * th * 0.92, belfryTop + 1.7, ftz + s2 * th * 0.92);
+        spireGeos.push(pin.getAttribute('position').array);
+      }
+    }
+    // A slate cross finial on the spire apex, so it clearly reads as a church.
+    const apexY = belfryTop + spireH;
+    const stem = new THREE.BoxGeometry(0.16, 2.2, 0.16);
+    stem.translate(ftx, apexY + 1.1, ftz);
+    const bar = new THREE.BoxGeometry(1.2, 0.16, 0.16);
+    bar.translate(ftx, apexY + 1.4, ftz);
+    spireGeos.push(stem.toNonIndexed().getAttribute('position').array);
+    spireGeos.push(bar.toNonIndexed().getAttribute('position').array);
+  }
 }
 
 // Build the hollow, furnished, enterable inside of a church nave.
