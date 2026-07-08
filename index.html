@@ -143,6 +143,31 @@
         margin-top: 4px;
         color: #6a6058;
       }
+      #placard {
+        position: fixed;
+        left: 50%;
+        bottom: 40px;
+        transform: translate(-50%, 14px);
+        background: #fffdf7;
+        color: #2a2320;
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        padding: 9px 18px;
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.14);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+        pointer-events: none;
+        opacity: 0;
+        transition:
+          opacity 0.18s ease,
+          transform 0.18s ease;
+        z-index: 30;
+      }
+      #placard.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
       a.link {
         color: #1f6feb;
         text-decoration: none;
@@ -212,6 +237,7 @@
   </head>
   <body>
     <canvas id="map"></canvas>
+    <div id="placard"></div>
 
     <div id="topbar" class="panel">
       <b>Châteaugiron · 2D</b>

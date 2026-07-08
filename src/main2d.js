@@ -16,6 +16,8 @@ import {
   ringCentroid,
   nearestPoint,
   mapTargets,
+  namedPlaces,
+  nearestWithin,
 } from './lib/map2d.js';
 import {
   prepareFeatures,
@@ -40,6 +42,7 @@ const mctx = mini.getContext('2d');
 const hudPos = document.getElementById('pos');
 const hudZoom = document.getElementById('zoom');
 const intro = document.getElementById('intro');
+const placard = document.getElementById('placard');
 
 let W = 0;
 let H = 0;
@@ -165,6 +168,10 @@ async function main() {
   // and the jump menu (church, château, the étang and the jardin).
   const targets = mapTargets(data.features, project);
 
+  // Every named building, for the "you are at ..." placard when the player
+  // walks up to one.
+  const places = namedPlaces(data.features, project);
+
   // Whole-town minimap, pre-rendered once, plus the "jump to" buttons.
   const miniBase = buildMinimapBase(prepared, bounds, mini.width);
 
@@ -257,6 +264,7 @@ async function main() {
     if (posTimer > 0.2) {
       posTimer = 0;
       updateReadout(targets, player);
+      updatePlacard(places, player);
       hudZoom.textContent = `zoom ${zoom}× · ${(1 / zoom).toFixed(2)} m/px`;
     }
     requestAnimationFrame(frameLoop);
@@ -278,6 +286,22 @@ function updateReadout(targets, player) {
     hudPos.textContent = `near ${best.label} · ${Math.round(bestD)} m`;
   } else {
     hudPos.textContent = 'Châteaugiron';
+  }
+}
+
+// Raise a placard naming the building the player is standing at, once they are
+// within a few metres of a named place. Hidden again as they walk away.
+let placardName = null;
+function updatePlacard(places, player) {
+  const hit = nearestWithin(places, player.x, player.n, 12);
+  const name = hit ? hit.place.label : null;
+  if (name === placardName) return;
+  placardName = name;
+  if (name) {
+    placard.textContent = name;
+    placard.classList.add('show');
+  } else {
+    placard.classList.remove('show');
   }
 }
 

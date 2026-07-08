@@ -280,3 +280,72 @@ export function mapTargets(features, project) {
   }
   return out;
 }
+
+// Every named building in the town, as {label, x, n, poly} in world metres (poly
+// is the projected footprint ring), so the player gets a "you are at ..."
+// placard when they walk up to one. These are the 50 real named places (cinema,
+// dojo, chapelle, gendarmerie, schools ...) that make the town navigable.
+export function namedPlaces(features, project) {
+  const out = [];
+  for (const f of features) {
+    if (f.k !== 'building' || !f.t || !f.t.name) continue;
+    const poly = f.g.map((p) => project(p[0], p[1]));
+    const c = ringCentroid(poly);
+    out.push({ label: f.t.name, x: c.x, n: c.n, poly });
+  }
+  return out;
+}
+
+// Shortest distance from a point to a building: 0 if inside the footprint, else
+// the distance to the nearest wall. Big buildings (a long church) then trigger
+// the placard as soon as the player reaches a wall, not only at the centre.
+export function distanceToPlace(place, x, n) {
+  const ring = place.poly;
+  if (!ring || ring.length < 2) return Math.hypot(place.x - x, place.n - n);
+  if (pointInRing(x, n, ring)) return 0;
+  let best = Infinity;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    best = Math.min(best, distToSegment(x, n, a[0], a[1], b[0], b[1]));
+  }
+  return best;
+}
+
+function pointInRing(x, n, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const ni = ring[i][1];
+    const xj = ring[j][0];
+    const nj = ring[j][1];
+    const hit = ni > n !== nj > n && x < ((xj - xi) * (n - ni)) / (nj - ni) + xi;
+    if (hit) inside = !inside;
+  }
+  return inside;
+}
+
+function distToSegment(px, pn, ax, an, bx, bn) {
+  const dx = bx - ax;
+  const dn = bn - an;
+  const len2 = dx * dx + dn * dn;
+  let t = len2 ? ((px - ax) * dx + (pn - an) * dn) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), pn - (an + t * dn));
+}
+
+// Nearest place within a radius (metres) of a point, measured to the footprint,
+// or null. Used to raise the building placard only when the player is standing
+// at a named place.
+export function nearestWithin(places, x, n, radius) {
+  let best = null;
+  let bestD = radius;
+  for (const p of places) {
+    const d = distanceToPlace(p, x, n);
+    if (d <= bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best ? { place: best, d: bestD } : null;
+}

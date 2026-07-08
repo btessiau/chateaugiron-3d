@@ -16,6 +16,9 @@ import {
   classifyLandmark,
   buildingHeight,
   mapTargets,
+  namedPlaces,
+  nearestWithin,
+  distanceToPlace,
 } from './map2d.js';
 
 const id = (lon, lat) => [lon, lat]; // identity projector: input is already metres
@@ -308,5 +311,88 @@ describe('mapTargets', () => {
   it('omits targets that are not in the data', () => {
     const only = mapTargets([{ k: 'building', t: { building: 'house' }, g: ring(0, 0) }], id);
     expect(only).toEqual([]);
+  });
+});
+
+describe('namedPlaces', () => {
+  const ring = (cx, cn) => [
+    [cx - 1, cn - 1],
+    [cx + 1, cn - 1],
+    [cx + 1, cn + 1],
+    [cx - 1, cn + 1],
+  ];
+  const feats = [
+    { k: 'building', t: { name: 'Cinéma Paradisio' }, g: ring(10, 20) },
+    { k: 'building', t: { building: 'house' }, g: ring(0, 0) }, // no name
+    { k: 'building', t: null, g: ring(5, 5) }, // no tags
+    { k: 'green', t: { name: 'Jardin' }, g: ring(-8, 3) }, // not a building
+    { k: 'road', t: { name: 'Rue de Rennes' }, g: ring(2, 2) }, // not a building
+  ];
+
+  it('returns one entry per named building with its centroid and footprint', () => {
+    const p = namedPlaces(feats, id);
+    expect(p).toHaveLength(1);
+    expect(p[0].label).toBe('Cinéma Paradisio');
+    expect(p[0].x).toBe(10);
+    expect(p[0].n).toBe(20);
+    expect(p[0].poly).toEqual(ring(10, 20));
+  });
+});
+
+describe('distanceToPlace', () => {
+  const sq = {
+    label: 'S',
+    x: 0,
+    n: 0,
+    poly: [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ],
+  };
+  it('is zero inside the footprint', () => {
+    expect(distanceToPlace(sq, 0, 0)).toBe(0);
+  });
+  it('is the distance to the nearest wall outside', () => {
+    expect(distanceToPlace(sq, 3, 0)).toBe(2);
+    expect(distanceToPlace(sq, 0, -4)).toBe(3);
+  });
+  it('measures to the nearest corner past a wall end', () => {
+    expect(distanceToPlace(sq, 4, 4)).toBeCloseTo(Math.hypot(3, 3), 6);
+  });
+  it('handles a degenerate edge without dividing by zero', () => {
+    const dup = {
+      label: 'D',
+      x: 0,
+      n: 0,
+      poly: [
+        [1, 1],
+        [1, 1],
+        [3, 1],
+        [3, 3],
+        [1, 3],
+      ],
+    };
+    expect(distanceToPlace(dup, 0, 0)).toBeCloseTo(Math.hypot(1, 1), 6);
+  });
+  it('falls back to the centroid when there is no footprint', () => {
+    expect(distanceToPlace({ x: 0, n: 0 }, 3, 4)).toBe(5);
+    expect(distanceToPlace({ x: 0, n: 0, poly: [[2, 0]] }, 5, 0)).toBe(5);
+  });
+});
+
+describe('nearestWithin', () => {
+  const places = [
+    { label: 'A', x: 0, n: 0 },
+    { label: 'B', x: 100, n: 0 },
+  ];
+  it('returns the nearest place inside the radius', () => {
+    const r = nearestWithin(places, 5, 0, 12);
+    expect(r.place.label).toBe('A');
+    expect(r.d).toBe(5);
+  });
+  it('returns null when nothing is inside the radius', () => {
+    expect(nearestWithin(places, 50, 0, 12)).toBe(null);
   });
 });
