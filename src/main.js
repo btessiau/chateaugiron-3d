@@ -294,6 +294,34 @@ async function init() {
       yaw: l.yaw,
       scale: l.scale,
     }));
+
+    // A few more people at the two landmarks the player walks to, so the town
+    // is alive there too. Each spot is nudged out of any building by the same
+    // collider used for the player, so nobody stands inside a wall.
+    const pushPerson = (x, z, tx, tz, scale) => {
+      const [nx, nz] = collide(grid, world.colliders, x, z, 0.6);
+      specs.push({ x: nx, z: nz, yaw: Math.atan2(tx - nx, tz - nz), scale });
+    };
+    const ch = world.landmarks && world.landmarks.church;
+    if (ch && ch.box) {
+      const { cx, cz, ux, uz, vx, vz, L } = ch.box;
+      const tw = (s, t) => [cx + ux * s + vx * t, cz + uz * s + vz * t];
+      const [dx, dz] = tw(-L, 0); // the church door
+      let p = tw(-L - 4, -3.5);
+      pushPerson(p[0], p[1], dx, dz, 1.0);
+      p = tw(-L - 6.5, 3);
+      pushPerson(p[0], p[1], dx, dz, 0.97);
+    }
+    const kp = world.landmarks && world.landmarks.keep;
+    if (kp) {
+      const dirx = Math.cos(kp.doorA);
+      const dirz = Math.sin(kp.doorA);
+      const gx = kp.kx + dirx * (kp.rWall + 3.5);
+      const gz = kp.kz + dirz * (kp.rWall + 3.5);
+      pushPerson(gx - dirz * 3, gz + dirx * 3, kp.kx, kp.kz, 1.02);
+      pushPerson(gx + dirz * 2.5, gz - dirx * 2.5, kp.kx, kp.kz, 0.98);
+    }
+
     npcs = await buildNPCs(
       `${import.meta.env.BASE_URL}models/gltf/casual_male.glb`,
       specs,
@@ -325,6 +353,7 @@ async function init() {
     hf,
     water,
     ambience,
+    landmarks: world.landmarks,
   };
 }
 
