@@ -10,6 +10,8 @@ Walk the real town of [Châteaugiron](https://en.wikipedia.org/wiki/Ch%C3%A2teau
 
 **Live demo:** https://btessiau.github.io/chateaugiron-3d/
 
+The live demo opens the 2D top-down map: a clean Pokemon-style view of the real streets and buildings, each drawn with a little height so it reads in 2.5D. The full 3D game is one click away, or open it directly at https://btessiau.github.io/chateaugiron-3d/play3d.html
+
 ## What it does
 
 - Builds the medieval core from real map data: 5,000+ buildings, roads, the étang, green spaces, each building at its real height and position, projected to metres so distances are true 1:1.

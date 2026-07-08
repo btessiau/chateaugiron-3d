@@ -8,10 +8,11 @@ export default defineConfig({
   server: { host: true },
   build: {
     rollupOptions: {
-      // Two pages: the 3D game (index) and the 2D top-down map (map2d).
+      // Two pages: the 2D top-down map is the main view (index), the 3D game
+      // lives on its own page (play3d).
       input: {
-        main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        map2d: fileURLToPath(new URL('./map2d.html', import.meta.url)),
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        play3d: fileURLToPath(new URL('./play3d.html', import.meta.url)),
       },
     },
   },

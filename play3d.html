@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>Châteaugiron 3D · walk the town at 1:1</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        background: #0b0e13;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          sans-serif;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      canvas {
+        display: block;
+      }
+
+      #hud {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        z-index: 5;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #cfe3ff;
+        background: rgba(10, 16, 26, 0.55);
+        border: 1px solid rgba(120, 160, 220, 0.25);
+        border-radius: 8px;
+        padding: 8px 10px;
+        pointer-events: none;
+        backdrop-filter: blur(4px);
+        font-variant-numeric: tabular-nums;
+      }
+      #hud b {
+        color: #7fb0ff;
+      }
+
+      #minimap-wrap {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        z-index: 5;
+        width: 180px;
+        text-align: center;
+        pointer-events: none;
+      }
+      #minimap {
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: rgba(10, 16, 26, 0.55);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+      }
+      #compass {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #cfe3ff;
+        background: rgba(10, 16, 26, 0.55);
+        border: 1px solid rgba(120, 160, 220, 0.25);
+        border-radius: 6px;
+        padding: 2px 8px;
+        display: inline-block;
+        font-variant-numeric: tabular-nums;
+      }
+      #sound {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #cfe3ff;
+        background: rgba(10, 16, 26, 0.55);
+        border: 1px solid rgba(120, 160, 220, 0.25);
+        border-radius: 6px;
+        padding: 2px 8px;
+        display: block;
+        width: fit-content;
+        margin-left: auto;
+        margin-right: auto;
+        cursor: pointer;
+        pointer-events: auto;
+        user-select: none;
+      }
+
+      #photo {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(4, 7, 12, 0.82);
+        transition: opacity 0.2s ease;
+      }
+      #photo.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #photo-inner {
+        position: relative;
+        max-width: 88vw;
+        max-height: 86vh;
+      }
+      #photo-img {
+        display: block;
+        max-width: 88vw;
+        max-height: 86vh;
+        border-radius: 10px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65);
+        background: #11161f;
+        min-width: 320px;
+        min-height: 200px;
+      }
+      #photo-cap {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #b9cbe6;
+        text-align: center;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+      }
+      #photo-cap a {
+        color: #8fb2df;
+      }
+      #photo-close {
+        position: absolute;
+        top: -14px;
+        right: -14px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        font-size: 15px;
+        color: #06111f;
+        background: linear-gradient(180deg, #9ecbff, #5b9bff);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+      }
+
+      #overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(1200px 600px at 50% 28%, rgba(20, 38, 66, 0.35), rgba(6, 9, 14, 0.86)),
+          linear-gradient(rgba(6, 9, 14, 0.62), rgba(6, 9, 14, 0.82)),
+          url('./textures/landmarks/chateau_ensemble_01.jpg') center 42% / cover no-repeat;
+        transition: opacity 0.35s ease;
+      }
+      #overlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .card {
+        max-width: 460px;
+        text-align: center;
+        padding: 28px 30px;
+        border-radius: 16px;
+        background: rgba(14, 20, 32, 0.78);
+        border: 1px solid rgba(120, 160, 220, 0.28);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+      }
+      .card h1 {
+        font-size: 22px;
+        color: #eaf2ff;
+        margin-bottom: 6px;
+        letter-spacing: 0.2px;
+      }
+      .card p {
+        font-size: 13.5px;
+        color: #a9c0e0;
+        margin-bottom: 16px;
+      }
+      .keys {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+      }
+      .key {
+        font-size: 12px;
+        color: #cfe3ff;
+        background: rgba(40, 60, 92, 0.6);
+        border: 1px solid rgba(120, 160, 220, 0.3);
+        border-radius: 6px;
+        padding: 4px 8px;
+      }
+      .start {
+        cursor: pointer;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 22px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #06111f;
+        background: linear-gradient(180deg, #9ecbff, #5b9bff);
+        box-shadow: 0 8px 20px rgba(70, 130, 220, 0.35);
+      }
+      .start:hover {
+        filter: brightness(1.06);
+      }
+      .loading {
+        font-size: 12px;
+        color: #86a2c8;
+        margin-top: 14px;
+        min-height: 16px;
+      }
+      .hero-credit {
+        font-size: 10px;
+        color: #7d93b4;
+        margin-top: 14px;
+        line-height: 1.4;
+      }
+      .hero-credit a {
+        color: #8fb2df;
+      }
+      .credit {
+        position: fixed;
+        right: 10px;
+        bottom: 8px;
+        z-index: 4;
+        font-size: 10.5px;
+        color: #6b83a6;
+      }
+      .credit a {
+        color: #8fb2df;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud">
+      <div><b>Châteaugiron</b> · 1:1 scale</div>
+      <div id="hud-pos">loading…</div>
+      <div id="hud-count"></div>
+    </div>
+
+    <div class="credit">
+      Map data © OpenStreetMap contributors (ODbL) · Photos © Panoramax (CC BY-SA 4.0) · Aerial ©
+      IGN · Character by Quaternius (CC0) · Ambience: public domain (Wikimedia Commons)
+    </div>
+
+    <div id="minimap-wrap">
+      <canvas id="minimap" width="180" height="180"></canvas>
+      <div id="compass">N · 0°</div>
+      <div id="sound" title="Toggle sound (M)">🔊 sound</div>
+    </div>
+
+    <div id="photo" class="hidden">
+      <div id="photo-inner">
+        <img id="photo-img" alt="Real street photo of Châteaugiron" />
+        <div id="photo-cap"></div>
+        <button id="photo-close" title="Close (P or Esc)">✕</button>
+      </div>
+    </div>
+
+    <div id="overlay">
+      <div class="card">
+        <h1>Châteaugiron, at 1:1</h1>
+        <p>
+          Walk the real town in your browser. Built from open map data around the medieval château.
+        </p>
+        <div class="keys">
+          <span class="key">W A S D · move</span>
+          <span class="key">Mouse · look</span>
+          <span class="key">Shift · run</span>
+          <span class="key">Space · jump</span>
+          <span class="key">V · 1st / 3rd person</span>
+          <span class="key">P · real photo here</span>
+          <span class="key">M · sound</span>
+          <span class="key">Esc · release</span>
+        </div>
+        <button class="start" id="start" disabled>Loading town…</button>
+        <div class="loading" id="loading"></div>
+        <div style="margin-top: 12px; font-size: 13px">
+          <a href="./index.html" style="color: #7fd0a0; font-weight: 600; text-decoration: none"
+            >Prefer a map? Play the 2D Pokémon-style version →</a
+          >
+        </div>
+        <div class="hero-credit">
+          Château de Châteaugiron · photo © pom'., CC BY-SA 2.0, via Flickr
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
