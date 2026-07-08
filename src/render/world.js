@@ -191,26 +191,6 @@ function applyFacade(mat, tex) {
   };
 }
 
-// A low-poly broadleaf tree: brown trunk plus a chunky green canopy, coloured by
-// vertex so one InstancedMesh can draw the whole woodland.
-function makeTreeGeometry() {
-  const trunk = new THREE.CylinderGeometry(0.16, 0.24, 1.7, 5).toNonIndexed();
-  trunk.translate(0, 0.85, 0);
-  paint(trunk, new THREE.Color(0x6b4f31));
-  const c1 = new THREE.IcosahedronGeometry(1.6, 0);
-  c1.scale(1, 0.9, 1);
-  c1.translate(0, 2.7, 0);
-  paint(c1, new THREE.Color(0x5a8a45));
-  const c2 = new THREE.IcosahedronGeometry(1.15, 0);
-  c2.translate(0.5, 3.7, 0.2);
-  paint(c2, new THREE.Color(0x71a052));
-  return mergeGeometries([trunk, c1, c2], false);
-}
-
-function paint(geo, color) {
-  setColorAttr(geo, color);
-}
-
 function isWooded(tags) {
   return (
     tags.landuse === 'forest' ||
@@ -597,42 +577,138 @@ function buildChateau(group, groundY, colliders, landmarks = null) {
   }
 }
 
-// Build one InstancedMesh for a list of tree placements ({ x, z, s }).
-function instanceTrees(placements, groundY) {
+// A procedurally painted leafy canopy on a transparent background, used as a
+// crossed-billboard impostor so trees read as soft foliage at eye level instead
+// of faceted blobs. Drawn once and reused for every tree; per-tree colour comes
+// from instanceColor. No external asset, no licence, fully deterministic.
+let _foliageTex = null;
+function foliageTexture() {
+  if (_foliageTex) return _foliageTex;
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  let s = 20;
+  const rnd = () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+  const cx = size * 0.5;
+  const cy = size * 0.44;
+  const RX = size * 0.36;
+  const RY = size * 0.4;
+  const puffs = [];
+  for (let i = 0; i < 40; i++) {
+    const a = rnd() * Math.PI * 2;
+    const rr = Math.pow(rnd(), 0.75);
+    const px = cx + Math.cos(a) * rr * RX;
+    const py = cy + Math.sin(a) * rr * RY - RY * 0.05;
+    const pr = size * (0.1 + rnd() * 0.11) * (1 - rr * 0.22);
+    puffs.push({ px, py, pr });
+  }
+  puffs.sort((A, B) => B.py - A.py);
+  for (const p of puffs) {
+    const grd = g.createRadialGradient(p.px, p.py - p.pr * 0.45, p.pr * 0.08, p.px, p.py, p.pr);
+    const hv = 1 - p.py / size;
+    const L = Math.min(1, (0.6 + hv * 0.6) * (0.7 + rnd() * 0.4));
+    grd.addColorStop(0, `rgba(${(150 * L) | 0},${(190 * L) | 0},${(88 * L) | 0},1)`);
+    grd.addColorStop(0.6, `rgba(${(70 * L) | 0},${(120 * L) | 0},${(52 * L) | 0},0.96)`);
+    grd.addColorStop(1, `rgba(${(45 * L) | 0},${(84 * L) | 0},${(40 * L) | 0},0)`);
+    g.fillStyle = grd;
+    g.beginPath();
+    g.arc(p.px, p.py, p.pr, 0, Math.PI * 2);
+    g.fill();
+  }
+  const img = g.getImageData(0, 0, size, size);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] > 24) {
+      const n = (rnd() - 0.5) * 26;
+      d[i] += n;
+      d[i + 1] += n;
+      d[i + 2] += n * 0.6;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  _foliageTex = tex;
+  return tex;
+}
+
+// Two crossed vertical quads carrying the foliage texture, base at y=0.
+function foliageGeo() {
+  const W = 5.6;
+  const H = 6.2;
+  const base = 1.3; // canopy overlaps the trunk top
+  const a = new THREE.PlaneGeometry(W, H);
+  a.translate(0, base + H / 2, 0);
+  const b = new THREE.PlaneGeometry(W, H);
+  b.rotateY(Math.PI / 2);
+  b.translate(0, base + H / 2, 0);
+  return mergeGeometries([a, b], false);
+}
+
+// Build instanced billboard trees: a solid trunk cylinder plus a crossed foliage
+// impostor, both driven by the same placements. Returns a Group so it drops into
+// the same call sites as the old low-poly tree mesh.
+function instanceBillboardTrees(placements, groundY) {
   if (!placements.length) return null;
-  const geo = makeTreeGeometry();
-  if (!geo) return null;
-  const mat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
+  const n = placements.length;
+  const group = new THREE.Group();
+
+  const trunkGeo = new THREE.CylinderGeometry(0.16, 0.26, 2.6, 5).toNonIndexed();
+  trunkGeo.translate(0, 1.3, 0);
+  const trunkMat = new THREE.MeshStandardMaterial({
+    color: 0x5b4327,
     roughness: 0.95,
     metalness: 0,
   });
-  const mesh = new THREE.InstancedMesh(geo, mat, placements.length);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  const trunk = new THREE.InstancedMesh(trunkGeo, trunkMat, n);
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+
+  const foliage = new THREE.InstancedMesh(
+    foliageGeo(),
+    new THREE.MeshStandardMaterial({
+      map: foliageTexture(),
+      alphaTest: 0.32,
+      side: THREE.DoubleSide,
+      roughness: 0.9,
+      metalness: 0,
+    }),
+    n,
+  );
+  // The aerial ground already carries baked canopy shadows, so the impostors do
+  // not cast their own (which would show as crossed rectangles).
+  foliage.castShadow = false;
+  foliage.receiveShadow = false;
+
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
   const scl = new THREE.Vector3();
   const pos = new THREE.Vector3();
   const col = new THREE.Color();
-  for (let i = 0; i < placements.length; i++) {
+  for (let i = 0; i < n; i++) {
     const p = placements[i];
     q.setFromAxisAngle(up, (i * 2.399963) % (Math.PI * 2));
-    scl.set(p.s, p.s * (0.9 + (i % 5) * 0.05), p.s);
-    pos.set(p.x, groundY(p.x, p.z) - 0.2, p.z);
+    scl.set(p.s, p.s * (0.92 + (i % 5) * 0.05), p.s);
+    pos.set(p.x, groundY(p.x, p.z) - 0.1, p.z);
     m.compose(pos, q, scl);
-    mesh.setMatrixAt(i, m);
-    // Per-tree tint so the woodland is not one flat green: vary brightness and
-    // nudge warm/cool. instanceColor multiplies the canopy and trunk colours.
-    const b = 0.85 + fract01(Math.sin(i * 3.71) * 9137.13) * 0.22;
-    const w = (fract01(Math.sin(i * 1.73) * 3571.31) - 0.5) * 0.14;
-    col.setRGB(Math.min(1, b * (1 + w)), Math.min(1, b * 1.04), Math.min(1, b * (1 - w * 0.6)));
-    mesh.setColorAt(i, col);
+    trunk.setMatrixAt(i, m);
+    foliage.setMatrixAt(i, m);
+    const b = 0.82 + fract01(Math.sin(i * 3.71) * 9137.13) * 0.3;
+    const w = (fract01(Math.sin(i * 1.73) * 3571.31) - 0.5) * 0.16;
+    col.setRGB(Math.min(1, b * (1 + w)), Math.min(1, b * 1.05), Math.min(1, b * (1 - w * 0.6)));
+    foliage.setColorAt(i, col);
   }
-  mesh.instanceMatrix.needsUpdate = true;
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  return mesh;
+  trunk.instanceMatrix.needsUpdate = true;
+  foliage.instanceMatrix.needsUpdate = true;
+  if (foliage.instanceColor) foliage.instanceColor.needsUpdate = true;
+  group.add(trunk, foliage);
+  return group;
 }
 
 // Scatter instanced trees across every wooded polygon, up to a budget.
@@ -648,7 +724,7 @@ function buildTrees(group, woods, groundY) {
       if (placements.length >= MAX) break;
     }
   }
-  const mesh = instanceTrees(placements, groundY);
+  const mesh = instanceBillboardTrees(placements, groundY);
   if (mesh) group.add(mesh);
 }
 
@@ -660,7 +736,7 @@ export function addTreePoints(scene, points, proj, groundY) {
     const t = r - Math.floor(r);
     return { x, z, s: 0.85 + t * 0.7 };
   });
-  const mesh = instanceTrees(placements, groundY);
+  const mesh = instanceBillboardTrees(placements, groundY);
   if (mesh) scene.add(mesh);
   return mesh;
 }
