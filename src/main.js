@@ -362,8 +362,8 @@ async function init() {
   const sp = world.spawn || { x: 18, z: 62 };
   player.setGround(groundAt);
   player.setPosition(sp.x, groundAt(sp.x, sp.z), sp.z);
-  // Frame the avatar from behind, looking toward the château.
-  player.yaw = Math.atan2(sp.x, sp.z);
+  // Frame the avatar from behind, looking toward the church facade.
+  player.yaw = sp.yaw !== undefined ? sp.yaw : Math.atan2(sp.x, sp.z);
   player._placeCamera();
 
   // A few idle townsfolk in the open ground ahead of the spawn, so the town
@@ -376,19 +376,21 @@ async function init() {
     fwd.normalize();
     const side = new THREE.Vector3(-fwd.z, 0, fwd.x);
     const layout = [
-      { f: 12, p: -5, yaw: 2.7 },
-      { f: 17, p: 8, yaw: -1.4 },
-      { f: 23, p: -11, yaw: 3.9, scale: 1.03 },
-      { f: 21, p: 4, yaw: 0.5 },
-      { f: 29, p: -3, yaw: 3.2, scale: 0.94 },
-      { f: 14, p: 14, yaw: -2.4, scale: 0.97 },
+      { f: 6, p: -10, yaw: 1.4 },
+      { f: 8, p: 9, yaw: -1.2 },
+      { f: -4, p: -7, yaw: 2.7, scale: 1.03 },
+      { f: -6, p: 6, yaw: 0.4 },
+      { f: -9, p: -12, yaw: 3.2, scale: 0.94 },
+      { f: 2, p: 13, yaw: -2.4, scale: 0.97 },
     ];
-    const specs = layout.map((l) => ({
-      x: sp.x + fwd.x * l.f + side.x * l.p,
-      z: sp.z + fwd.z * l.f + side.z * l.p,
-      yaw: l.yaw,
-      scale: l.scale,
-    }));
+    // Nudge each out of any wall with the same collider the player uses, so
+    // nobody stands inside the church, a board or a neighbouring house.
+    const specs = layout.map((l) => {
+      const x = sp.x + fwd.x * l.f + side.x * l.p;
+      const z = sp.z + fwd.z * l.f + side.z * l.p;
+      const [nx, nz] = collide(grid, world.colliders, x, z, 0.6);
+      return { x: nx, z: nz, yaw: l.yaw, scale: l.scale };
+    });
 
     // A few more people at the two landmarks the player walks to, so the town
     // is alive there too. Each spot is nudged out of any building by the same

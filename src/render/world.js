@@ -1532,10 +1532,42 @@ export function buildWorld(scene, data, proj, hf = null, options = {}) {
     pushGroundPatch(cobblePos, cxp, czp, ox, oz, -oz, ox, depth, 4.5, groundY, 0.07);
   }
 
-  // A cobbled market square under the spawn point, so the very first ground the
-  // player stands on reads as real paving instead of the blurry aerial photo.
-  const spawn = pickSpawn(bCentroids);
-  pushGroundPatch(cobblePos, spawn.x, spawn.z, 1, 0, 0, 1, 9, 9, groundY, 0.07);
+  // Spawn the player in the church square, a place they can name at a glance:
+  // the steeple ahead, the heritage boards and the war memorial around them, on
+  // a cobbled forecourt. Fall back to the open-spot picker if the church is
+  // somehow absent. yaw faces the facade so the first frame is the church.
+  let spawn;
+  if (landmarks.church) {
+    const { cx, cz, ux, uz, vx, vz, L } = landmarks.church.box;
+    const back = L + 18;
+    spawn = {
+      x: cx - ux * back,
+      z: cz - uz * back,
+      yaw: Math.atan2(-ux, -uz),
+      ux,
+      uz,
+      vx,
+      vz,
+    };
+  } else {
+    const s = pickSpawn(bCentroids);
+    spawn = { x: s.x, z: s.z, yaw: Math.atan2(s.x, s.z), ux: 1, uz: 0, vx: 0, vz: 1 };
+  }
+  // A cobbled apron under the spawn, so the first ground underfoot reads as real
+  // paving instead of the blurry aerial photo. Oriented to the approach.
+  pushGroundPatch(
+    cobblePos,
+    spawn.x,
+    spawn.z,
+    spawn.ux,
+    spawn.uz,
+    spawn.vx,
+    spawn.vz,
+    9,
+    9,
+    groundY,
+    0.07,
+  );
 
   const group = new THREE.Group();
   const cullables = [];
