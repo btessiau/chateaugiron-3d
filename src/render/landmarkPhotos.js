@@ -42,8 +42,12 @@ function captionTexture(lines) {
 }
 
 function capLines(entry, title) {
-  const by = entry.author ? `© ${entry.author}` : '© Wikimedia Commons';
-  return [title, by, `${entry.license} · Wikimedia Commons`];
+  const by = entry.author ? `© ${entry.author}` : '© contributors';
+  let provider = '';
+  if (entry.source && entry.source.includes('flickr.com')) provider = ' · Flickr';
+  else if (entry.source && entry.source.includes('wikimedia.org'))
+    provider = ' · Wikimedia Commons';
+  return [title, by, `${entry.license}${provider}`];
 }
 
 // A framed, unlit photo panel of the given height, keeping the image aspect,
@@ -157,6 +161,7 @@ function placeChurchPhotos(scene, ch, manifest, base) {
 
 function placeKeepBoard(scene, kp, manifest, base) {
   const ext =
+    pick(manifest, 'chateau_exterior', /donjon_sun/) ||
     pick(manifest, 'chateau_exterior', /exterior_04/) ||
     pick(manifest, 'chateau_exterior', /facade_01/) ||
     pick(manifest, 'chateau_exterior');

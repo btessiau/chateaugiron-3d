@@ -44,6 +44,24 @@
       "author": "chisloup",
       "source": "https://commons.wikimedia.org/wiki/File:Chateaugiron_,_le_chateau_-_panoramio.jpg",
       "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
+    },
+    {
+      "file": "textures/landmarks/chateau_donjon_sun_01.jpg",
+      "w": 683,
+      "h": 1024,
+      "license": "CC BY 2.0",
+      "author": "Amaury Laporte",
+      "source": "https://www.flickr.com/photos/8283439@N04/51739561587",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0/"
+    },
+    {
+      "file": "textures/landmarks/chateau_ensemble_01.jpg",
+      "w": 1024,
+      "h": 1024,
+      "license": "CC BY-SA 2.0",
+      "author": "pom'.",
+      "source": "https://www.flickr.com/photos/146832554@N06/51774666185",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/"
     }
   ],
   "church_exterior": [
