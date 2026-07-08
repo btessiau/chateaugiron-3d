@@ -17,6 +17,7 @@ import { addPhotoPoints } from './render/photos.js';
 import { addLandmarkPhotos } from './render/landmarkPhotos.js';
 import { nearestIndex } from './lib/nearest.js';
 import { Ambience } from './render/ambience.js';
+import { buildNPCs } from './render/npcs.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay');
@@ -108,6 +109,7 @@ scene.add(fill);
 // ---- Walker ----
 let player = null;
 let avatar = null;
+let npcs = null;
 let water = null;
 let waterNormals = null;
 
@@ -263,6 +265,40 @@ async function init() {
   player.yaw = Math.atan2(sp.x, sp.z);
   player._placeCamera();
 
+  // A few idle townsfolk in the open ground ahead of the spawn, so the town
+  // feels lived in the moment you enter. Placed along the initial view
+  // direction with lateral spread, on the terrain, facing varied ways.
+  try {
+    const fwd = new THREE.Vector3();
+    camera.getWorldDirection(fwd);
+    fwd.y = 0;
+    fwd.normalize();
+    const side = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const layout = [
+      { f: 12, p: -5, yaw: 2.7 },
+      { f: 17, p: 8, yaw: -1.4 },
+      { f: 23, p: -11, yaw: 3.9, scale: 1.03 },
+      { f: 21, p: 4, yaw: 0.5 },
+      { f: 29, p: -3, yaw: 3.2, scale: 0.94 },
+      { f: 14, p: 14, yaw: -2.4, scale: 0.97 },
+    ];
+    const specs = layout.map((l) => ({
+      x: sp.x + fwd.x * l.f + side.x * l.p,
+      z: sp.z + fwd.z * l.f + side.z * l.p,
+      yaw: l.yaw,
+      scale: l.scale,
+    }));
+    npcs = await buildNPCs(
+      `${import.meta.env.BASE_URL}models/gltf/casual_male.glb`,
+      specs,
+      groundAt,
+    );
+    scene.add(npcs.group);
+  } catch (err) {
+    console.warn('No townsfolk.', err);
+    npcs = null;
+  }
+
   const c = data.meta.counts || {};
   hudCount.textContent = `${c.building || 0} buildings · ${c.road || 0} roads · ${c.water || 0} water · ${c.green || 0} green`;
 
@@ -369,6 +405,7 @@ const clock = new THREE.Clock();
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (player) player.update(dt);
+  if (npcs) npcs.update(dt);
   if (waterNormals) {
     waterNormals.offset.x += dt * 0.012;
     waterNormals.offset.y += dt * 0.009;
