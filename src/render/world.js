@@ -565,7 +565,14 @@ function buildChateau(group, groundY, colliders, landmarks = null) {
       maxZ: wz + chord / 2,
     });
   }
-  const shaft = new THREE.Mesh(mergeGeometries(wallGeos, false), stone);
+  const shaftTex = tiledTexture('castle-wall.jpg');
+  shaftTex.repeat.set(1, 9);
+  const shaftMat = new THREE.MeshStandardMaterial({
+    map: shaftTex,
+    roughness: 0.95,
+    metalness: 0.0,
+  });
+  const shaft = new THREE.Mesh(mergeGeometries(wallGeos, false), shaftMat);
   shaft.castShadow = true;
   shaft.receiveShadow = true;
   group.add(shaft);
