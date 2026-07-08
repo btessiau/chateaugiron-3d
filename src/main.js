@@ -343,7 +343,11 @@ async function init() {
   // Animated CC0 avatar for third person. Optional.
   avatar = new Avatar();
   try {
-    await avatar.load(`${import.meta.env.BASE_URL}models/gltf/casual_male.glb`, { modelYaw: 0 });
+    // The mesh faces local +Z, but movement heading assumes -Z is forward, so
+    // without this half-turn the avatar walks backward (the "moonwalk").
+    await avatar.load(`${import.meta.env.BASE_URL}models/gltf/casual_male.glb`, {
+      modelYaw: Math.PI,
+    });
     scene.add(avatar.root);
   } catch (err) {
     console.warn('No avatar model, third person disabled.', err);
